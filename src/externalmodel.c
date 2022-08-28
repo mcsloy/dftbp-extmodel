@@ -2,7 +2,7 @@
 
 @brief
 Example external model for the DFTB+ project: www.dftbplus.org
-Copyright (C) 2006 - 2022  B. Hourahine
+Copyright (C) 2006 - 2022 B. Hourahine
 
 See the LICENSE file for terms of usage and distribution.
 
@@ -50,6 +50,8 @@ extern "C" {
       passed in from DFTB+ */
   typedef struct {
 
+    bool initialised;
+    int number;
     
   } mystate;
 
@@ -99,13 +101,18 @@ extern "C" {
 
      @param nspecies number of chemical species/types present
      @param species array of null terminated strings labelling chemical species
+     @param cutoffs array of cutoffs for distance over which atoms of
+     each species have hamiltonian interactions
+     @param state internal state and data of the model, not checked in
+     DFTB+, just passed around
      @param message return message, in event of routine failure (return != 0)
 
      @return 0 on successful return, non-zero if there is an error
      message to check
 
    */
-  int initialise_model_for_dftbp(int* nspecies, char* species[], char* message) {
+  int initialise_model_for_dftbp(int* nspecies, char* species[], double cutoffs[], typeof (mystate) *state,
+                                 char* message) {
 
     FILE *input;
     int i;
@@ -124,7 +131,47 @@ extern "C" {
 	sprintf(message, "Toy library only knows about C and H atoms, not %s.\n", species[i]);
 	return -2;
       }
+
+      if (strcmp(species[i], "C") == 0) {
+        cutoffs[i] = 2.35;
+      }
+      if (strcmp(species[i], "H") == 0) {
+        cutoffs[i] = 1.35;
+      }
+
     }
+    printf("\n");
+
+    *state = (mystate) {.initialised = true, .number = 6};
+
+    // blank return message if nothing happening
+    sprintf(message, "\n");
+    return 0;
+
+  }
+
+
+  /**
+     Set up this model, read some settings from DFTB+ over it's
+     external model API, read a parameter file and initialise it's
+     data structure for handling via DFTB+.
+
+     @param nspecies number of chemical species/types present
+     @param species array of null terminated strings labelling chemical species
+     @param cutoffs array of cutoffs for distance over which atoms of
+     each species have hamiltonian interactions
+     @param state internal state and data of the model, not checked in
+     DFTB+, just passed around
+     @param message return message, in event of routine failure (return != 0)
+
+     @return 0 on successful return, non-zero if there is an error
+     message to check
+
+   */
+  int update_model_for_dftbp(typeof (mystate) *state, char* message) {
+
+    printf((*state).initialised ? "\ntrue\n" : "\nfalse\n");
+    printf("%d\n", (*state).number);
 
     // blank return message if nothing happening
     sprintf(message, "\n");
