@@ -6,5 +6,6 @@ External models for (semi-)empirical chemistry
 Externally provides a model to the semiempirical code
 [DFTB+](https://www.dftbplus.org) via a library structure.
 
-An example of a simple model (Hückel-like) is given and documentation
-for adding other external models.
+An example of a [simple Hückel-like hamiltonian](./doc/MODEL.md) is
+given and documentation for adding other external models through the
+DFTB model API.
