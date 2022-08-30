@@ -96,8 +96,8 @@ extern "C" {
 
   /**
      Set up this model, read some settings from DFTB+ over it's
-     external model API, read a parameter file and initialise it's
-     data structure for handling via DFTB+.
+     external model API and initialise it's data structure for
+     handling via DFTB+.
 
      @param nspecies number of chemical species/types present
      @param species array of null terminated strings labelling chemical species
@@ -140,7 +140,6 @@ extern "C" {
       }
 
     }
-    printf("\n");
 
     *state = (mystate) {.initialised = true, .number = 6};
 
@@ -152,17 +151,14 @@ extern "C" {
 
 
   /**
-     Set up this model, read some settings from DFTB+ over it's
-     external model API, read a parameter file and initialise it's
-     data structure for handling via DFTB+.
+     Update this model, using geometric and other information from
+     DFTB+ over it's external model API.
 
-     @param nspecies number of chemical species/types present
-     @param species array of null terminated strings labelling chemical species
-     @param cutoffs array of cutoffs for distance over which atoms of
-     each species have hamiltonian interactions
-     @param state internal state and data of the model, not checked in
-     DFTB+, just passed around
-     @param message return message, in event of routine failure (return != 0)
+     @param state internal state and data of the model, this is not
+     checke by DFTB+, just passed around by it
+
+     @param message return message, in event of routine failure
+     (return != 0)
 
      @return 0 on successful return, non-zero if there is an error
      message to check
@@ -170,8 +166,9 @@ extern "C" {
    */
   int update_model_for_dftbp(typeof (mystate) *state, char* message) {
 
-    printf((*state).initialised ? "\ntrue\n" : "\nfalse\n");
-    printf("%d\n", (*state).number);
+    printf("\nInternal check, Model is initialised? ");
+    printf((*state).initialised ? "true\n" : "false\n");
+    printf("Internal model state cargo %d\n", (*state).number);
 
     // blank return message if nothing happening
     sprintf(message, "\n");
@@ -179,6 +176,30 @@ extern "C" {
 
   }
 
+  /**
+     Clean up after this model, freeing any memory in the mystate type
+
+     @param state internal state and data of the model. This is not
+     checke by DFTB+, just passed around by it, so we need to remove
+     any allocated memory here.
+
+     @param message return message, in event of routine failure
+     (return != 0)
+
+     @return 0 on successful return, non-zero if there is an error
+     message to check
+
+  */
+  int cleanup_model_for_dftbp(typeof (mystate) *state, char* message) {
+
+    printf("\nInternal check, Model is initialised? ");
+    printf((*state).initialised ? "true\n" : "false\n");
+
+    // blank return message if nothing happening
+    sprintf(message, "\n");
+    return 0;
+
+  }
 
 #ifdef __cplusplus
 }
