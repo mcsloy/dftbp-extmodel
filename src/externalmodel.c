@@ -13,7 +13,7 @@ See the LICENSE file for terms of usage and distribution.
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include "../api/externalmodel.h"
+#include "../include/externalmodel.h"
 
 
 /**
@@ -72,11 +72,11 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
    message to check
 
 */
-int initialise_model_for_dftbp(int* nspecies, char* species[], double cutoffs[], typeof (mystate) *state,
+int initialise_model_for_dftbp(int* nspecies, char* species[], double* qmCutoff, typeof (mystate) *state,
                                char* message) {
 
   FILE *input;
-  int i;
+  int i, items, natspec;
 
   /* Open input file for some constants for this model, assuming it's
      in the runtime directory */
@@ -86,23 +86,66 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double cutoffs[],
     return -1;
   }
 
+  /* read ancillary input file for model parameters and then store
+     them into the model's internal structure */
+  items = fscanf(input,"%f %f", &state->onsites[0], &state->onsites[1] );
+  if (items == EOF) {
+    sprintf(message, "Toy library malformed end of data file at first line\n");
+    return -3;
+  }
+  if (items != 2) {
+    sprintf(message, "Toy library malformed first line of data file: %i\n", items);
+    return -3;
+  }
+  items = fscanf(input,"%f %f %f", &state->hopping[0], &state->hopping[1], &state->hopping[2]);
+  if (items == EOF) {
+    sprintf(message, "Toy library malformed end of data file before 2nd line\n");
+    return -3;
+  }
+  if (items != 3) {
+    sprintf(message, "Toy library malformed second line of data file\n");
+    return -3;
+  }
+  items = fscanf(input,"%f %f %f", &state->cutoffs[0], &state->cutoffs[1], &state->cutoffs[2]);
+  if (items == EOF) {
+    sprintf(message, "Toy library malformed end of data file before 3rd line\n");
+    return -3;
+  }
+  if (items != 3) {
+    sprintf(message, "Toy library malformed third line of data file\n");
+    return -3;
+  }
+
   // This specific model is only for H and C atoms, so will throw an error otherwise
+  *qmCutoff = 0.0;
+  natspec = 0;
   for (i=0;i<*nspecies;i++) {
     if (strcmp(species[i], "C") != 0 && strcmp(species[i], "H") != 0) {
       sprintf(message, "Toy library only knows about C and H atoms, not %s.\n", species[i]);
       return -2;
     }
-
-    if (strcmp(species[i], "C") == 0) {
-      cutoffs[i] = 2.35;
-    }
     if (strcmp(species[i], "H") == 0) {
-      cutoffs[i] = 1.35;
+      if (*qmCutoff < (*state).cutoffs[0]) {
+        *qmCutoff = (*state).cutoffs[0];
+      }
+      natspec++;
     }
-
+    if (strcmp(species[i], "C") == 0) {
+      if (*qmCutoff < (*state).cutoffs[1]) {
+        *qmCutoff = (*state).cutoffs[1];
+      }
+      natspec++;
+    }
+  }
+  if (natspec == 2) {
+    if (*qmCutoff < (*state).cutoffs[2]) {
+      *qmCutoff = (*state).cutoffs[2];
+    }
   }
 
-  *state = (mystate) {.initialised = true, .number = 6};
+  printf("internal cut %f", *qmCutoff);
+
+  (*state).initialised = true;
 
   // blank return message if nothing happening
   sprintf(message, "\n");
@@ -129,7 +172,8 @@ int update_model_for_dftbp(typeof (mystate) *state, char* message) {
 
   printf("\nInternal check, Model is initialised? ");
   printf((*state).initialised ? "true\n" : "false\n");
-  printf("Internal model state cargo %d\n", (*state).number);
+
+  printf("On-site energies : H %f, C %f\n", (*state).onsites[0], (*state).onsites[1]);
 
   // blank return message if nothing happening
   sprintf(message, "\n");

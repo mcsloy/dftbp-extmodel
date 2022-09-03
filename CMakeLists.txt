@@ -5,7 +5,7 @@ add_library(mylib src/externalmodel.c)
 set_target_properties(mylib PROPERTIES
   VERSION ${PROJECT_VERSION}
   SOVERSION 1
-  PUBLIC_HEADER api/mylib.h)
+  PUBLIC_HEADER include/externalmodel.h)
 configure_file(mylib.pc.in mylib.pc @ONLY)
 target_include_directories(mylib PRIVATE .)
 install(TARGETS mylib

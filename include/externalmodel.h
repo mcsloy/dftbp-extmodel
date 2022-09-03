@@ -49,7 +49,12 @@ extern "C" {
   typedef struct {
 
     bool initialised;
-    int number;
+
+    // internal model parameters and state
+
+    float onsites[2]; // H and C alph
+    float hopping[3]; // H-H, H-C and C-C beta
+    float cutoffs[3]; // H-H, H-C and C-C cutoff distances, in a.u.
 
   } mystate;
 
@@ -82,8 +87,8 @@ extern "C" {
 
      @param nspecies number of chemical species/types present
      @param species array of null terminated strings labelling chemical species
-     @param cutoffs array of cutoffs for distance over which atoms of
-     each species have hamiltonian interactions
+     @param qmCutoff cutoff for quantum part of model, i.e. distance
+     over which atoms of each species have hamiltonian interactions
      @param state internal state and data of the model, not checked in
      DFTB+, just passed around
      @param message return message, in event of routine failure (return != 0)
@@ -92,7 +97,7 @@ extern "C" {
      message to check
 
    */
-  int initialise_model_for_dftbp(int* nspecies, char* species[], double cutoffs[], typeof (mystate) *state,
+  int initialise_model_for_dftbp(int* nspecies, char* species[], double* qmCutoff, typeof (mystate) *state,
                                  char* message);
 
 
