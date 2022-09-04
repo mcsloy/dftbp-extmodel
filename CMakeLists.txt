@@ -1,15 +1,18 @@
 cmake_minimum_required(VERSION 3.16)
-project(mylib VERSION 0.0.1 DESCRIPTION "mylib description")
-include(GNUInstallDirs)
-add_library(mylib src/externalmodel.c)
-set_target_properties(mylib PROPERTIES
+project(externaldftbpmodel VERSION 0.0.1 DESCRIPTION "Toy external model for the DFTB+ code")
+
+set(sources src/externalmodel.c)
+
+add_library(externalmodel_objlib OBJECT ${sources})
+
+set(includedir ${CMAKE_CURRENT_BINARY_DIR}/include)
+
+set_target_properties(externalmodel_objlib PROPERTIES
   VERSION ${PROJECT_VERSION}
   SOVERSION 1
   PUBLIC_HEADER include/externalmodel.h)
-configure_file(mylib.pc.in mylib.pc @ONLY)
-target_include_directories(mylib PRIVATE .)
-install(TARGETS mylib
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(FILES ${CMAKE_BINARY_DIR}/mylib.pc
-  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig)
+
+set_target_properties(externalmodel_objlib PROPERTIES Fortran_MODULE_DIRECTORY ${includedir})
+set_target_properties(externalmodel_objlib PROPERTIES POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
+
+target_include_directories(externalmodel_objlib PUBLIC ${includedir})
