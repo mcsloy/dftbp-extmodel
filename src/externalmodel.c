@@ -63,7 +63,11 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
    @param nspecies number of chemical species/types present
    @param species array of null terminated strings labelling chemical species
    @param cutoffs array of cutoffs for distance over which atoms of
-   each species have hamiltonian interactions
+   each species have interactions
+   @param nshells number of shells of atomic orbitals, set to 0 if not
+   a hamiltonian model
+   @param shells Angular momentum of shells species resolved atomic
+   shells, freed on return to DFTB+
    @param state internal state and data of the model, not checked in
    DFTB+, just passed around
    @param message return message, in event of routine failure (return != 0)
@@ -72,11 +76,11 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
    message to check
 
 */
-int initialise_model_for_dftbp(int* nspecies, char* species[], double* qmCutoff, typeof (mystate) *state,
-                               char* message) {
+int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff, int* nshells[],
+                               int** shells, typeof(mystate) *state, char* message) {
 
   FILE *input;
-  int i, items, natspec;
+  int ii, items, natspec;
 
   /* Open input file for some constants for this model, assuming it's
      in the runtime directory */
@@ -87,8 +91,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* qmCutoff,
   }
 
   /* read ancillary input file for model parameters and then store
-     them into the model's internal structure */
-  items = fscanf(input,"%f %f", &state->onsites[0], &state->onsites[1] );
+     them into the model's internal structure */  items = fscanf(input,"%f %f", &state->onsites[0], &state->onsites[1] );
   if (items == EOF) {
     sprintf(message, "Toy library malformed end of data file at first line\n");
     return -3;
@@ -117,33 +120,40 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* qmCutoff,
   }
 
   // This specific model is only for H and C atoms, so will throw an error otherwise
-  *qmCutoff = 0.0;
+  *maxCutoff = 0.0;
   natspec = 0;
-  for (i=0;i<*nspecies;i++) {
-    if (strcmp(species[i], "C") != 0 && strcmp(species[i], "H") != 0) {
-      sprintf(message, "Toy library only knows about C and H atoms, not %s.\n", species[i]);
+  for (ii=0;ii<*nspecies;ii++) {
+    if (strcmp(species[ii], "C") != 0 && strcmp(species[ii], "H") != 0) {
+      sprintf(message, "Toy library only knows about C and H atoms, not %s.\n", species[ii]);
       return -2;
     }
-    if (strcmp(species[i], "H") == 0) {
-      if (*qmCutoff < (*state).cutoffs[0]) {
-        *qmCutoff = (*state).cutoffs[0];
+    if (strcmp(species[ii], "H") == 0) {
+      if (*maxCutoff < (*state).cutoffs[0]) {
+        *maxCutoff = (*state).cutoffs[0];
       }
       natspec++;
     }
-    if (strcmp(species[i], "C") == 0) {
-      if (*qmCutoff < (*state).cutoffs[1]) {
-        *qmCutoff = (*state).cutoffs[1];
+    if (strcmp(species[ii], "C") == 0) {
+      if (*maxCutoff < (*state).cutoffs[1]) {
+        *maxCutoff = (*state).cutoffs[1];
       }
       natspec++;
     }
   }
-  if (natspec == 2) {
-    if (*qmCutoff < (*state).cutoffs[2]) {
-      *qmCutoff = (*state).cutoffs[2];
+  if (natspec > 1) {
+    /* check the heteronuclear cutoff */
+    if (*maxCutoff < (*state).cutoffs[2]) {
+      *maxCutoff = (*state).cutoffs[2];
     }
   }
 
-  printf("internal cut %f", *qmCutoff);
+  /* This particular model is Huckel-like, so only a single s-like
+     orbital per shell, irrespective of species */
+  *shells =  malloc(*nspecies*sizeof(int));
+  for (ii=0;ii<*nspecies;ii++) {
+    (*nshells)[ii] = 1;
+    (*shells)[ii] = 0;
+  }
 
   (*state).initialised = true;
 
@@ -159,7 +169,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* qmCutoff,
    over it's external model API.
 
    @param state internal state and data of the model, this is not
-   checke by DFTB+, just passed around by it
+   checked by DFTB+, just passed around by it
 
    @param message return message, in event of routine failure
    (return != 0)
@@ -168,7 +178,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* qmCutoff,
    message to check
 
 */
-int update_model_for_dftbp(typeof (mystate) *state, char* message) {
+int update_model_for_dftbp(typeof(mystate) *state, char* message) {
 
   printf("\nInternal check, Model is initialised? ");
   printf((*state).initialised ? "true\n" : "false\n");
@@ -195,7 +205,7 @@ int update_model_for_dftbp(typeof (mystate) *state, char* message) {
    message to check
 
 */
-int cleanup_model_for_dftbp(typeof (mystate) *state, char* message) {
+int cleanup_model_for_dftbp(typeof(mystate) *state, char* message) {
 
   printf("\nInternal check, Model is initialised? ");
   printf((*state).initialised ? "true\n" : "false\n");

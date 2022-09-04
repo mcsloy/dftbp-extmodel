@@ -87,9 +87,13 @@ extern "C" {
 
      @param nspecies number of chemical species/types present
      @param species array of null terminated strings labelling chemical species
-     @param qmCutoff cutoff for quantum part of model, i.e. distance
-     over which atoms of each species have hamiltonian interactions
-     @param state internal state and data of the model, not checked in
+     @param maxCutoff Longest cutoff for, i.e. distance over which
+     atoms of each species have hamiltonian or repulsive interactions
+     @param nshells number of shells of atomic orbitals, set to 0 if not
+     a hamiltonian model
+     @param shells Angular momentum of shells species resolved atomic
+     shells, freed on return to DFTB+
+     @param state internal state and data of the model, not checked by
      DFTB+, just passed around
      @param message return message, in event of routine failure (return != 0)
 
@@ -97,8 +101,8 @@ extern "C" {
      message to check
 
    */
-  int initialise_model_for_dftbp(int* nspecies, char* species[], double* qmCutoff, typeof (mystate) *state,
-                                 char* message);
+  int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff, int* nshells[],
+                                 int** shells, typeof(mystate) *state, char* message);
 
 
     /**
@@ -115,8 +119,7 @@ extern "C" {
      message to check
 
    */
-  int update_model_for_dftbp(typeof (mystate) *state, char* message);
-
+  int update_model_for_dftbp(typeof(mystate) *state, char* message);
 
   /**
      Clean up after this model, freeing any memory in the mystate type
