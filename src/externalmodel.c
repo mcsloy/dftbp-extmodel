@@ -77,7 +77,7 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
    message to check
 
 */
-int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff, int* nshells[],
+int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff, int** nshells,
                                int** shells, double** shellOccs, typeof(mystate) *state,
                                char* message) {
 
@@ -153,6 +153,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff
   /* This particular model is Huckel-like, so only a one single s-like
      orbital per shell, irrespective of species */
   *shells =  malloc(*nspecies * 1 * sizeof(int));
+  *nshells =  malloc(*nspecies * sizeof(int));
   for (ii=0; ii<*nspecies; ii++) {
     (*nshells)[ii] = 1;
     (*shells)[ii] = 0;
