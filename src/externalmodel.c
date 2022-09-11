@@ -68,6 +68,7 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
    a hamiltonian model
    @param shells Angular momentum of shells species resolved atomic
    shells, freed on return to DFTB+
+   @param shellOccs Reference occupation for neutrality, freed on return to DFTB+
    @param state internal state and data of the model, not checked in
    DFTB+, just passed around
    @param message return message, in event of routine failure (return != 0)
@@ -77,7 +78,8 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
 
 */
 int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff, int* nshells[],
-                               int** shells, typeof(mystate) *state, char* message) {
+                               int** shells, double** shellOccs, typeof(mystate) *state,
+                               char* message) {
 
   FILE *input;
   int ii, items, natspec;
@@ -91,7 +93,8 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff
   }
 
   /* read ancillary input file for model parameters and then store
-     them into the model's internal structure */  items = fscanf(input,"%f %f", &state->onsites[0], &state->onsites[1] );
+     them into the model's internal structure */
+  items = fscanf(input,"%f %f", &state->onsites[0], &state->onsites[1] );
   if (items == EOF) {
     sprintf(message, "Toy library malformed end of data file at first line\n");
     return -3;
@@ -147,12 +150,23 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff
     }
   }
 
-  /* This particular model is Huckel-like, so only a single s-like
+  /* This particular model is Huckel-like, so only a one single s-like
      orbital per shell, irrespective of species */
-  *shells =  malloc(*nspecies * sizeof(int));
-  for (ii=0;ii<*nspecies;ii++) {
+  *shells =  malloc(*nspecies * 1 * sizeof(int));
+  for (ii=0; ii<*nspecies; ii++) {
     (*nshells)[ii] = 1;
     (*shells)[ii] = 0;
+  }
+
+  // each atomic shell is neutral when containing a single electron:
+  *shellOccs =  malloc(*nspecies * sizeof(double));
+  for (ii=0; ii<*nspecies; ii++) {
+    if (strcmp(species[ii], "C") == 0) {
+      (*shellOccs)[ii] = 1.0;
+    }
+    if (strcmp(species[ii], "H") == 0) {
+      (*shellOccs)[ii] = 1.0;
+    }
   }
 
   (*state).initialised = true;

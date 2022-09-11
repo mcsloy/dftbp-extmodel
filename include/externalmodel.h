@@ -96,6 +96,7 @@ extern "C" {
      a hamiltonian model
      @param shells Angular momentum of shells species resolved atomic
      shells, freed on return to DFTB+
+     @param shellOccs Reference occupation for neutrality, freed on return to DFTB+
      @param state internal state and data of the model, not checked by
      DFTB+, just passed around
      @param message return message, in event of routine failure (return != 0)
@@ -105,7 +106,8 @@ extern "C" {
 
    */
   int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff, int* nshells[],
-                                 int** shells, typeof(mystate) *state, char* message);
+                                 int** shells, double** shellOccs, typeof(mystate) *state,
+                                 char* message);
 
 
     /**
