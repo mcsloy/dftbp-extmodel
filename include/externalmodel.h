@@ -29,6 +29,9 @@ extern "C" {
     /** Does this library deliver energy terms (other than the band-structure energy)? */
     bool energy;
 
+    /** Order of derivatives returned by the model */
+    int derivativeOrder;
+
     /** Is the model self-consistent */
     bool selfconsistent;
 

@@ -48,8 +48,8 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
 
   // flags for capabilities of this specific model
   *capabilities = (mycapabilities) {
-    .hamiltonian = true, .overlap = false, .energy = false, .selfconsistent = false,
-    .spinchannels = 0, .atomsubset = false, .mpi = false
+    .hamiltonian = true, .overlap = false, .energy = false, .derivativeOrder = 0,
+    .selfconsistent = false, .spinchannels = 0, .atomsubset = false, .mpi = false
   };
 
   return;
@@ -62,7 +62,7 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
 
    @param nspecies number of chemical species/types present
    @param species array of null terminated strings labelling chemical species
-   @param cutoffs array of cutoffs for distance over which atoms of
+   @param maxCutoff array of cutoffs for distance over which atoms of
    each species have interactions
    @param nshells number of shells of atomic orbitals, set to 0 if not
    a hamiltonian model
@@ -149,7 +149,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff
 
   /* This particular model is Huckel-like, so only a single s-like
      orbital per shell, irrespective of species */
-  *shells =  malloc(*nspecies*sizeof(int));
+  *shells =  malloc(*nspecies * sizeof(int));
   for (ii=0;ii<*nspecies;ii++) {
     (*nshells)[ii] = 1;
     (*shells)[ii] = 0;
