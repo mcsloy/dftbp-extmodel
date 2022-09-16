@@ -62,8 +62,14 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
 
    @param nspecies number of chemical species/types present
    @param species array of null terminated strings labelling chemical species
-   @param maxCutoff array of cutoffs for distance over which atoms of
-   each species have interactions
+   @param interactCutoff array of cutoffs for distance over which
+   atoms of each species have interactions (i.e. diatomic matrix
+   elements or repulsive contributions)
+   @param environmentCutoff Distance over which neighbours influence
+   interactions, i,e. 0 if model is environmentally independent, or
+   nearest-neighbour/longer if surrounding atoms influence
+   interactions. This is used to cut out local clusters of around
+   the interacting atom/dimer
    @param nshells number of shells of atomic orbitals, set to 0 if not
    a hamiltonian model
    @param shells Angular momentum of shells species resolved atomic
@@ -77,8 +83,9 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
    message to check
 
 */
-int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff, int** nshells,
-                               int** shells, double** shellOccs, typeof(mystate) *state,
+int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactCutoff,
+                               double* environmentCutoff, int** nshells, int** shells,
+                               double** shellOccs, typeof(mystate) *state,
                                char* message) {
 
   FILE *input;
@@ -123,7 +130,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff
   }
 
   // This specific model is only for H and C atoms, so will throw an error otherwise
-  *maxCutoff = 0.0;
+  *interactCutoff = 0.0;
   natspec = 0;
   for (ii=0;ii<*nspecies;ii++) {
     if (strcmp(species[ii], "C") != 0 && strcmp(species[ii], "H") != 0) {
@@ -131,24 +138,28 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff
       return -2;
     }
     if (strcmp(species[ii], "H") == 0) {
-      if (*maxCutoff < (*state).cutoffs[0]) {
-        *maxCutoff = (*state).cutoffs[0];
+      if (*interactCutoff < (*state).cutoffs[0]) {
+        *interactCutoff = (*state).cutoffs[0];
       }
       natspec++;
     }
     if (strcmp(species[ii], "C") == 0) {
-      if (*maxCutoff < (*state).cutoffs[1]) {
-        *maxCutoff = (*state).cutoffs[1];
+      if (*interactCutoff < (*state).cutoffs[1]) {
+        *interactCutoff = (*state).cutoffs[1];
       }
       natspec++;
     }
   }
   if (natspec > 1) {
     /* check the heteronuclear cutoff */
-    if (*maxCutoff < (*state).cutoffs[2]) {
-      *maxCutoff = (*state).cutoffs[2];
+    if (*interactCutoff < (*state).cutoffs[2]) {
+      *interactCutoff = (*state).cutoffs[2];
     }
   }
+
+  // This model is not environmentally dependent, so surrounding atoms
+  // have no influence on diatomic elements:
+  *environmentCutoff = 0.0;
 
   /* This particular model is Huckel-like, so only a one single s-like
      orbital per shell, irrespective of species */

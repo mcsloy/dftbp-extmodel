@@ -90,8 +90,13 @@ extern "C" {
 
      @param nspecies number of chemical species/types present
      @param species array of null terminated strings labelling chemical species
-     @param maxCutoff Longest cutoff for, i.e. distance over which
+     @param interactCutoff Longest cutoff for, i.e. distance over which
      atoms of each species have hamiltonian or repulsive interactions
+     @param environmentCutoff Distance over which neighbours influence
+     interactions, i,e. 0 if model is environmentally independent, or
+     nearest-neighbour/longer if surrounding atoms influence
+     interactions. This is used to cut out local clusters of around
+     the interacting atom/dimer
      @param nshells number of shells of atomic orbitals, set to 0 if not
      a hamiltonian model
      @param shells Angular momentum of shells species resolved atomic
@@ -105,9 +110,9 @@ extern "C" {
      message to check
 
    */
-  int initialise_model_for_dftbp(int* nspecies, char* species[], double* maxCutoff, int* nshells[],
-                                 int** shells, double** shellOccs, typeof(mystate) *state,
-                                 char* message);
+  int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactCutoff,
+                                 double* environmentCutoff, int* nshells[], int** shells,
+                                 double** shellOccs, typeof(mystate) *state, char* message);
 
 
     /**
