@@ -125,6 +125,23 @@ extern "C" {
    */
   int update_model_for_dftbp(typeof(mystate) *state, char* message);
 
+
+  /**
+      Get model predictions
+
+      @param state internal state and data of the model, this is not
+      checke by DFTB+, just passed around by it
+
+      @param message return message, in event of routine failure
+      (return != 0)
+
+      @return 0 on successful return, non-zero if there is an error
+      message to check
+
+  */
+  int predict_model_for_dftbp(typeof(mystate) *state, char* message);
+
+
   /**
      Clean up after this model, freeing any memory in the mystate type
 

@@ -132,7 +132,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
   // This specific model is only for H and C atoms, so will throw an error otherwise
   *interactCutoff = 0.0;
   natspec = 0;
-  for (ii=0;ii<*nspecies;ii++) {
+  for (ii = 0; ii < *nspecies; ii++) {
     if (strcmp(species[ii], "C") != 0 && strcmp(species[ii], "H") != 0) {
       sprintf(message, "Toy library only knows about C and H atoms, not %s.\n", species[ii]);
       return -2;
@@ -151,14 +151,17 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
     }
   }
   if (natspec > 1) {
-    /* check the heteronuclear cutoff */
+    /* check the heteronuclear cutoff as well if both species are
+       present */
     if (*interactCutoff < (*state).cutoffs[2]) {
       *interactCutoff = (*state).cutoffs[2];
     }
   }
 
-  // This model is not environmentally dependent, so surrounding atoms
-  // have no influence on diatomic elements:
+  /* This specific model is not environmentally dependent, so
+     surrounding atoms have no influence on onsite or diatomic
+     elements. Hence the cutoff for the surrounding enviroment can be
+     set to zero: */
   *environmentCutoff = 0.0;
 
   /* This particular model is Huckel-like, so only a single shells on
@@ -172,7 +175,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
     (*shellLValues)[ii] = 0;
   }
 
-  // each atom is neutral when its single shell containings one
+  // each atom is neutral when its single shell containing only one
   // electron:
   *shellOccs =  malloc(*nspecies * 1 * sizeof(double));
   for (ii=0; ii<*nspecies; ii++) {
@@ -219,6 +222,34 @@ int update_model_for_dftbp(typeof(mystate) *state, char* message) {
   return 0;
 
 }
+
+
+/**
+    Get model predictions
+
+    @param state internal state and data of the model, this is not
+     checke by DFTB+, just passed around by it
+
+     @param message return message, in event of routine failure
+     (return != 0)
+
+     @return 0 on successful return, non-zero if there is an error
+     message to check
+
+*/
+int predict_model_for_dftbp(typeof(mystate) *state, char* message) {
+
+  printf("\nInternal check, Model is initialised? ");
+  printf((*state).initialised ? "true\n" : "false\n");
+
+  printf("On-site energies : H %f, C %f\n", (*state).onsites[0], (*state).onsites[1]);
+
+  // blank return message if nothing happening
+  sprintf(message, "\n");
+  return 0;
+
+}
+
 
 /**
    Clean up after this model, freeing any memory in the mystate type
