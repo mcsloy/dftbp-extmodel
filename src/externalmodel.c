@@ -49,7 +49,7 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
   // flags for capabilities of this specific model
   *capabilities = (mycapabilities) {
     .hamiltonian = true, .overlap = false, .energy = false, .derivativeOrder = 0,
-    .selfconsistent = false, .spinchannels = 0, .atomsubset = false, .mpi = false
+    .selfconsistent = false, .spinchannels = 0
   };
 
   return;
@@ -70,9 +70,9 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
    nearest-neighbour/longer if surrounding atoms influence
    interactions. This is used to cut out local clusters of around
    the interacting atom/dimer
-   @param nshells number of shells of atomic orbitals, set to 0 if not
+   @param nShellsOnSpecies number of shells of atomic orbitals, set to 0 if not
    a hamiltonian model
-   @param shells Angular momentum of shells species resolved atomic
+   @param shellLValues Angular momentum of shells species resolved atomic
    shells, freed on return to DFTB+
    @param shellOccs Reference occupation for neutrality, freed on return to DFTB+
    @param state internal state and data of the model, not checked in
@@ -84,8 +84,8 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
 
 */
 int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactCutoff,
-                               double* environmentCutoff, int** nshells, int** shells,
-                               double** shellOccs, typeof(mystate) *state,
+                               double* environmentCutoff, int** nShellsOnSpecies,
+                               int** shellLValues, double** shellOccs, typeof(mystate) *state,
                                char* message) {
 
   FILE *input;
@@ -161,17 +161,20 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
   // have no influence on diatomic elements:
   *environmentCutoff = 0.0;
 
-  /* This particular model is Huckel-like, so only a one single s-like
-     orbital per shell, irrespective of species */
-  *shells =  malloc(*nspecies * 1 * sizeof(int));
-  *nshells =  malloc(*nspecies * sizeof(int));
+  /* This particular model is Huckel-like, so only a single shells on
+     each species containing an s-like orbital, irrespective of
+     species. Note count for shells uses Fortran convention starting
+     at 1, while L uses physics convention of s=0 */
+  *nShellsOnSpecies =  malloc(*nspecies * sizeof(int));
+  *shellLValues =  malloc(*nspecies * 1 * sizeof(int));
   for (ii=0; ii<*nspecies; ii++) {
-    (*nshells)[ii] = 1;
-    (*shells)[ii] = 0;
+    (*nShellsOnSpecies)[ii] = 1;
+    (*shellLValues)[ii] = 0;
   }
 
-  // each atomic shell is neutral when containing a single electron:
-  *shellOccs =  malloc(*nspecies * sizeof(double));
+  // each atom is neutral when its single shell containings one
+  // electron:
+  *shellOccs =  malloc(*nspecies * 1 * sizeof(double));
   for (ii=0; ii<*nspecies; ii++) {
     if (strcmp(species[ii], "C") == 0) {
       (*shellOccs)[ii] = 1.0;

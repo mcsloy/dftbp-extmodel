@@ -38,12 +38,6 @@ extern "C" {
     /** Number of spin channels supported by model (none:0, collinear:1, non-collinear:3) */
     int spinchannels;
 
-    /** Can model results be returned for a subset of atoms? */
-    bool atomsubset;
-
-    /** Is this library MPI aware (so requires a communicator)? */
-    bool mpi;
-
   } mycapabilities;
 
 
@@ -97,7 +91,7 @@ extern "C" {
      nearest-neighbour/longer if surrounding atoms influence
      interactions. This is used to cut out local clusters of around
      the interacting atom/dimer
-     @param nshells number of shells of atomic orbitals, set to 0 if not
+     @param nShellsOnSpecies number of shells of atomic orbitals, set to 0 if not
      a hamiltonian model
      @param shells Angular momentum of shells species resolved atomic
      shells, freed on return to DFTB+
@@ -111,7 +105,7 @@ extern "C" {
 
    */
   int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactCutoff,
-                                 double* environmentCutoff, int* nshells[], int** shells,
+                                 double* environmentCutoff, int* nShellsOnSpecies[], int** shells,
                                  double** shellOccs, typeof(mystate) *state, char* message);
 
 
