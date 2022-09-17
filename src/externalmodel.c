@@ -269,6 +269,7 @@ int cleanup_model_for_dftbp(typeof(mystate) *state, char* message) {
 
   printf("\nInternal check, Model is initialised? ");
   printf((*state).initialised ? "true\n" : "false\n");
+  printf("Cleaning up\n");
 
   // blank return message if nothing happening
   sprintf(message, "\n");
