@@ -91,6 +91,8 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
   FILE *input;
   int ii, items, natspec;
 
+  state = (typeof(mystate) *) malloc(sizeof(typeof(mystate)));
+
   /* Open input file for some constants for this model, assuming it's
      in the runtime directory */
   input=fopen("input.dat", "r");
@@ -189,6 +191,8 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
 
   (*state).initialised = true;
 
+  printf("Initial on-site energies : H %f, C %f\n", (*state).onsites[0], (*state).onsites[1]);
+
   // blank return message if nothing happening
   sprintf(message, "\n");
   return 0;
@@ -212,7 +216,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
 */
 int update_model_for_dftbp(typeof(mystate) *state, char* message) {
 
-  printf("\nInternal check, Model is initialised? ");
+  printf("\nInternal check for update_model_for_dftbp, Model is initialised? ");
   printf((*state).initialised ? "true\n" : "false\n");
 
   printf("On-site energies : H %f, C %f\n", (*state).onsites[0], (*state).onsites[1]);
@@ -239,7 +243,7 @@ int update_model_for_dftbp(typeof(mystate) *state, char* message) {
 */
 int predict_model_for_dftbp(typeof(mystate) *state, char* message) {
 
-  printf("\nInternal check, Model is initialised? ");
+  printf("\nInternal check for predict_model_for_dftbp, Model is initialised? ");
   printf((*state).initialised ? "true\n" : "false\n");
 
   printf("On-site energies : H %f, C %f\n", (*state).onsites[0], (*state).onsites[1]);
@@ -267,12 +271,14 @@ int predict_model_for_dftbp(typeof(mystate) *state, char* message) {
 */
 int cleanup_model_for_dftbp(typeof(mystate) *state, char* message) {
 
-  printf("\nInternal check, Model is initialised? ");
+  printf("\nInternal check for cleanup_model_for_dftbp, Model is initialised? ");
   printf((*state).initialised ? "true\n" : "false\n");
   printf("Cleaning up\n");
 
   // blank return message if nothing happening
   sprintf(message, "\n");
   return 0;
+
+  free(state);
 
 }
