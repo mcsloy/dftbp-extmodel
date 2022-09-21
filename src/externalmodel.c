@@ -13,6 +13,7 @@ See the LICENSE file for terms of usage and distribution.
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "../include/externalmodel.h"
 
 
@@ -85,25 +86,28 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
 */
 int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactCutoff,
                                double* environmentCutoff, int** nShellsOnSpecies,
-                               int** shellLValues, double** shellOccs, typeof(mystate) *state,
+                               int** shellLValues, double** shellOccs, intptr_t *state,
                                char* message) {
 
+  // Allocate structure for internal state, and generate intptr for return to DFTB+
+  typeof(mystate)* internalState = (typeof(mystate)*) malloc(sizeof(typeof(mystate)));
+  *state = (intptr_t) internalState;
+
   FILE *input;
-  int ii, items, natspec;
+  int ii, items, nSpeciesPresent;
 
-  state = (typeof(mystate) *) malloc(sizeof(typeof(mystate)));
-
-  /* Open input file for some constants for this model, assuming it's
-     in the runtime directory */
-  input=fopen("input.dat", "r");
+  // Open input file for some constants for this model, assuming it's
+  // in the runtime directory
+  input = fopen("input.dat", "r");
   if (!input) {
     sprintf(message, "Library error opening input file.\n");
     return -1;
   }
 
-  /* read ancillary input file for model parameters and then store
-     them into the model's internal structure */
-  items = fscanf(input,"%f %f", &state->onsites[0], &state->onsites[1] );
+  // read ancillary input file for model parameters and then store
+  // them into the model's internal structure, that in turn will get passed
+  // around between calls to the model.
+  items = fscanf(input,"%f %f", &internalState->onsites[0], &internalState->onsites[1] );
   if (items == EOF) {
     sprintf(message, "Toy library malformed end of data file at first line\n");
     return -3;
@@ -112,7 +116,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
     sprintf(message, "Toy library malformed first line of data file: %i\n", items);
     return -3;
   }
-  items = fscanf(input,"%f %f %f", &state->hopping[0], &state->hopping[1], &state->hopping[2]);
+  items = fscanf(input,"%f %f %f", &internalState->hopping[0], &internalState->hopping[1], &internalState->hopping[2]);
   if (items == EOF) {
     sprintf(message, "Toy library malformed end of data file before 2nd line\n");
     return -3;
@@ -121,7 +125,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
     sprintf(message, "Toy library malformed second line of data file\n");
     return -3;
   }
-  items = fscanf(input,"%f %f %f", &state->cutoffs[0], &state->cutoffs[1], &state->cutoffs[2]);
+  items = fscanf(input,"%f %f %f", &internalState->cutoffs[0], &internalState->cutoffs[1], &internalState->cutoffs[2]);
   if (items == EOF) {
     sprintf(message, "Toy library malformed end of data file before 3rd line\n");
     return -3;
@@ -133,30 +137,30 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
 
   // This specific model is only for H and C atoms, so will throw an error otherwise
   *interactCutoff = 0.0;
-  natspec = 0;
+  nSpeciesPresent = 0;
   for (ii = 0; ii < *nspecies; ii++) {
     if (strcmp(species[ii], "C") != 0 && strcmp(species[ii], "H") != 0) {
       sprintf(message, "Toy library only knows about C and H atoms, not %s.\n", species[ii]);
       return -2;
     }
     if (strcmp(species[ii], "H") == 0) {
-      if (*interactCutoff < (*state).cutoffs[0]) {
-        *interactCutoff = (*state).cutoffs[0];
+      if (*interactCutoff < (*internalState).cutoffs[0]) {
+        *interactCutoff = (*internalState).cutoffs[0];
       }
-      natspec++;
+      nSpeciesPresent++;
     }
     if (strcmp(species[ii], "C") == 0) {
-      if (*interactCutoff < (*state).cutoffs[1]) {
-        *interactCutoff = (*state).cutoffs[1];
+      if (*interactCutoff < (*internalState).cutoffs[1]) {
+        *interactCutoff = (*internalState).cutoffs[1];
       }
-      natspec++;
+      nSpeciesPresent++;
     }
   }
-  if (natspec > 1) {
-    /* check the heteronuclear cutoff as well if both species are
-       present */
-    if (*interactCutoff < (*state).cutoffs[2]) {
-      *interactCutoff = (*state).cutoffs[2];
+  if (nSpeciesPresent > 1) {
+    // check the heteronuclear cutoff as well if both species are
+    // present
+    if (*interactCutoff < (*internalState).cutoffs[2]) {
+      *interactCutoff = (*internalState).cutoffs[2];
     }
   }
 
@@ -177,7 +181,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
     (*shellLValues)[ii] = 0;
   }
 
-  // each atom is neutral when its single shell containing only one
+  // each atom is neutral when it's single shell containing only one
   // electron:
   *shellOccs =  malloc(*nspecies * 1 * sizeof(double));
   for (ii=0; ii<*nspecies; ii++) {
@@ -189,9 +193,9 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
     }
   }
 
-  (*state).initialised = true;
+  (*internalState).initialised = true;
 
-  printf("Initial on-site energies : H %f, C %f\n", (*state).onsites[0], (*state).onsites[1]);
+  printf(" Initial on-site energies : H %f, C %f\n", (*internalState).onsites[0], (*internalState).onsites[1]);
 
   // blank return message if nothing happening
   sprintf(message, "\n");
@@ -214,12 +218,15 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
    message to check
 
 */
-int update_model_for_dftbp(typeof(mystate) *state, char* message) {
+int update_model_for_dftbp(intptr_t *state, char* message) {
 
-  printf("\nInternal check for update_model_for_dftbp, Model is initialised? ");
-  printf((*state).initialised ? "true\n" : "false\n");
+  // map pointer back to structure
+  typeof(mystate)* internalState = (typeof(mystate)*) *state;
 
-  printf("On-site energies : H %f, C %f\n", (*state).onsites[0], (*state).onsites[1]);
+  printf("\nInternal check for update_model_for_dftbp, Model is initialised?");
+  printf((*internalState).initialised ? "true\n" : "false\n");
+
+  printf("On-site energies internally : H %f, C %f\n", (*internalState).onsites[0], (*internalState).onsites[1]);
 
   // blank return message if nothing happening
   sprintf(message, "\n");
@@ -241,12 +248,14 @@ int update_model_for_dftbp(typeof(mystate) *state, char* message) {
      message to check
 
 */
-int predict_model_for_dftbp(typeof(mystate) *state, char* message) {
+int predict_model_for_dftbp(intptr_t *state, char* message) {
+
+  typeof(mystate)* internalState = (typeof(mystate)*) *state;
 
   printf("\nInternal check for predict_model_for_dftbp, Model is initialised? ");
-  printf((*state).initialised ? "true\n" : "false\n");
+  printf((*internalState).initialised ? "true\n" : "false\n");
 
-  printf("On-site energies : H %f, C %f\n", (*state).onsites[0], (*state).onsites[1]);
+  printf("On-site energies : H %f, C %f\n", (*internalState).onsites[0], (*internalState).onsites[1]);
 
   // blank return message if nothing happening
   sprintf(message, "\n");
@@ -269,16 +278,23 @@ int predict_model_for_dftbp(typeof(mystate) *state, char* message) {
    message to check
 
 */
-int cleanup_model_for_dftbp(typeof(mystate) *state, char* message) {
+int cleanup_model_for_dftbp(intptr_t *state, char* message) {
+
+  // DFTB+ only sees integer pointer "state", so need original
+  // structure to clean up
+  typeof(mystate)* internalState = (typeof(mystate)*) *state;
 
   printf("\nInternal check for cleanup_model_for_dftbp, Model is initialised? ");
-  printf((*state).initialised ? "true\n" : "false\n");
+  printf((*internalState).initialised ? "true\n" : "false\n");
   printf("Cleaning up\n");
+
+  free(internalState);
+  *state = (intptr_t) internalState;
+
+  (*internalState).initialised = false;
 
   // blank return message if nothing happening
   sprintf(message, "\n");
   return 0;
-
-  free(state);
 
 }

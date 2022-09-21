@@ -106,7 +106,7 @@ extern "C" {
    */
   int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactCutoff,
                                  double* environmentCutoff, int* nShellsOnSpecies[], int** shells,
-                                 double** shellOccs, typeof(mystate) *state, char* message);
+                                 double** shellOccs, intptr_t *state, char* message);
 
 
     /**
@@ -123,7 +123,7 @@ extern "C" {
      message to check
 
    */
-  int update_model_for_dftbp(typeof(mystate) *state, char* message);
+  int update_model_for_dftbp(intptr_t *state, char* message);
 
 
   /**
@@ -139,7 +139,7 @@ extern "C" {
       message to check
 
   */
-  int predict_model_for_dftbp(typeof(mystate) *state, char* message);
+  int predict_model_for_dftbp(intptr_t *state, char* message);
 
 
   /**
@@ -156,7 +156,7 @@ extern "C" {
      message to check
 
   */
-  int cleanup_model_for_dftbp(typeof (mystate) *state, char* message);
+  int cleanup_model_for_dftbp(intptr_t *state, char* message);
   
 #ifdef __cplusplus
 }
