@@ -63,7 +63,7 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
 
    @param nspecies number of chemical species/types present
    @param species array of null terminated strings labelling chemical species
-   @param interactCutoff array of cutoffs for distance over which
+   @param interactionCutoff array of cutoffs for distance over which
    atoms of each species have interactions (i.e. diatomic matrix
    elements or repulsive contributions)
    @param environmentCutoff Distance over which neighbours influence
@@ -84,7 +84,7 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
    message to check
 
 */
-int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactCutoff,
+int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactionCutoff,
                                double* environmentCutoff, int** nShellsOnSpecies,
                                int** shellLValues, double** shellOccs, intptr_t *state,
                                char* message) {
@@ -136,7 +136,7 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
   }
 
   // This specific model is only for H and C atoms, so will throw an error otherwise
-  *interactCutoff = 0.0;
+  *interactionCutoff = 0.0;
   nSpeciesPresent = 0;
   for (ii = 0; ii < *nspecies; ii++) {
     if (strcmp(species[ii], "C") != 0 && strcmp(species[ii], "H") != 0) {
@@ -144,14 +144,14 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
       return -2;
     }
     if (strcmp(species[ii], "H") == 0) {
-      if (*interactCutoff < (*internalState).cutoffs[0]) {
-        *interactCutoff = (*internalState).cutoffs[0];
+      if (*interactionCutoff < (*internalState).cutoffs[0]) {
+        *interactionCutoff = (*internalState).cutoffs[0];
       }
       nSpeciesPresent++;
     }
     if (strcmp(species[ii], "C") == 0) {
-      if (*interactCutoff < (*internalState).cutoffs[1]) {
-        *interactCutoff = (*internalState).cutoffs[1];
+      if (*interactionCutoff < (*internalState).cutoffs[1]) {
+        *interactionCutoff = (*internalState).cutoffs[1];
       }
       nSpeciesPresent++;
     }
@@ -159,8 +159,8 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactC
   if (nSpeciesPresent > 1) {
     // check the heteronuclear cutoff as well if both species are
     // present
-    if (*interactCutoff < (*internalState).cutoffs[2]) {
-      *interactCutoff = (*internalState).cutoffs[2];
+    if (*interactionCutoff < (*internalState).cutoffs[2]) {
+      *interactionCutoff = (*internalState).cutoffs[2];
     }
   }
 

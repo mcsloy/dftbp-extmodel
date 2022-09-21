@@ -84,7 +84,7 @@ extern "C" {
 
      @param nspecies number of chemical species/types present
      @param species array of null terminated strings labelling chemical species
-     @param interactCutoff Longest cutoff for, i.e. distance over which
+     @param interactionCutoff Longest cutoff for, i.e. distance over which
      atoms of each species have hamiltonian or repulsive interactions
      @param environmentCutoff Distance over which neighbours influence
      interactions, i,e. 0 if model is environmentally independent, or
@@ -104,7 +104,7 @@ extern "C" {
      message to check
 
    */
-  int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactCutoff,
+  int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactionCutoff,
                                  double* environmentCutoff, int* nShellsOnSpecies[], int** shells,
                                  double** shellOccs, intptr_t *state, char* message);
 
