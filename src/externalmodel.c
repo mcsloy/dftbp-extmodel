@@ -164,11 +164,8 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interacti
     }
   }
 
-  /* This specific model is not environmentally dependent, so
-     surrounding atoms have no influence on onsite or diatomic
-     elements. Hence the cutoff for the surrounding enviroment can be
-     set to zero: */
-  *environmentCutoff = 0.0;
+  /* Surroundings required around atoms and bonds: */
+  *environmentCutoff = 4.0;
 
   /* This particular model is Huckel-like, so only a single shells on
      each species containing an s-like orbital, irrespective of
