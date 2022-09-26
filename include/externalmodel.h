@@ -47,6 +47,12 @@ extern "C" {
 
     bool initialised;
 
+    // References to data structures from DFTB+
+
+    int nAtomClusters;
+    int* indexAtomicClusters;
+    double* atomicClusters;
+
     // internal model parameters and state
 
     float onsites[2]; // H and C alph
@@ -123,7 +129,8 @@ extern "C" {
      message to check
 
    */
-  int update_model_for_dftbp(intptr_t *state, char* message);
+  int update_model_for_dftbp(intptr_t *state, int* nAtomicClusters, int* indexAtomicClusters,
+                             double* atomicClusters, char* message);
 
 
   /**
@@ -139,7 +146,7 @@ extern "C" {
       message to check
 
   */
-  int predict_model_for_dftbp(intptr_t *state, char* message);
+  int predict_model_for_dftbp(intptr_t *state, double* h0Index, char* message);
 
 
   /**
