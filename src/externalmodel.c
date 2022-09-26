@@ -271,18 +271,23 @@ int update_model_for_dftbp(intptr_t *state, int* nAtomicClusters, int* indexAtom
     Get model predictions
 
     @param state internal state and data of the model, this is not
-     checke by DFTB+, just passed around by it
+    checke by DFTB+, just passed around by it
 
-     @param message return message, in event of routine failure
-     (return != 0)
+    @param h0 hamiltonian
 
-     @return 0 on successful return, non-zero if there is an error
-     message to check
+    @param h0Index hamiltonian index for blocks of matrix elements
+
+    @param message return message, in event of routine failure
+    (return != 0)
+
+    @return 0 on successful return, non-zero if there is an error
+    message to check
 
 */
-int predict_model_for_dftbp(intptr_t *state, double* h0Index, char* message) {
+int predict_model_for_dftbp(intptr_t *state, double* h0, int* h0Index, int* h0IndexStride,
+                              int* nElemPerAtom, char* message) {
 
-  int iStart, iEnd;
+  int iStart, iEnd, jj;
 
   typeof(mystate)* internalState = (typeof(mystate)*) *state;
 
@@ -307,8 +312,10 @@ int predict_model_for_dftbp(intptr_t *state, double* h0Index, char* message) {
   }
 
   for (int ii=0; ii<(*internalState).nAtomClusters; ii++) {
-    h0Index[ii] = (double)(ii+1);
-    printf("%i %f\n", ii, h0Index[ii]);
+    jj = ii * *h0IndexStride;
+    iStart = h0Index[jj];
+    printf("Index %i %i %i\n", ii, jj, iStart);
+    h0[iStart] = (double)(ii+1);
   }
 
   // blank return message if nothing happening

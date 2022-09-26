@@ -1,5 +1,4 @@
 /**
-
    @brief
    Headers for example external model for the DFTB+ project:
    www.dftbplus.org Copyright (C) 2022 B. Hourahine
@@ -139,6 +138,10 @@ extern "C" {
       @param state internal state and data of the model, this is not
       checke by DFTB+, just passed around by it
 
+      @param h0 hamiltonian
+
+      @param h0Index hamiltonian index for blocks of matrix elements
+
       @param message return message, in event of routine failure
       (return != 0)
 
@@ -146,7 +149,8 @@ extern "C" {
       message to check
 
   */
-  int predict_model_for_dftbp(intptr_t *state, double* h0Index, char* message);
+  int predict_model_for_dftbp(intptr_t *state, double* h0, int* h0Index, int* h0IndexStride,
+                              int* nElemPerAtom, char* message);
 
 
   /**
