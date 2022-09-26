@@ -84,7 +84,7 @@ void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities)
    message to check
 
 */
-int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactionCutoff,
+int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* interactionCutoff,
                                double* environmentCutoff, int** nShellsOnSpecies,
                                int** shellLValues, double** shellOccs, intptr_t *state,
                                char* message) {
@@ -141,18 +141,18 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interacti
   *interactionCutoff = 0.0;
   nSpeciesPresent = 0;
   for (ii = 0; ii < *nspecies; ii++) {
-    if (strcmp(species[ii], "C") != 0 && strcmp(species[ii], "H") != 0) {
+    if (strcmp(speciesName[ii], "C") != 0 && strcmp(speciesName[ii], "H") != 0) {
       sprintf(message, "Toy library only knows about C and H atoms, not %s.\n",
-              species[ii]);
+              speciesName[ii]);
       return -2;
     }
-    if (strcmp(species[ii], "H") == 0) {
+    if (strcmp(speciesName[ii], "H") == 0) {
       if (*interactionCutoff < (*internalState).cutoffs[0]) {
         *interactionCutoff = (*internalState).cutoffs[0];
       }
       nSpeciesPresent++;
     }
-    if (strcmp(species[ii], "C") == 0) {
+    if (strcmp(speciesName[ii], "C") == 0) {
       if (*interactionCutoff < (*internalState).cutoffs[1]) {
         *interactionCutoff = (*internalState).cutoffs[1];
       }
@@ -185,10 +185,10 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interacti
   // electron:
   *shellOccs =  malloc(*nspecies * 1 * sizeof(double));
   for (ii=0; ii<*nspecies; ii++) {
-    if (strcmp(species[ii], "C") == 0) {
+    if (strcmp(speciesName[ii], "C") == 0) {
       (*shellOccs)[ii] = 1.0;
     }
-    if (strcmp(species[ii], "H") == 0) {
+    if (strcmp(speciesName[ii], "H") == 0) {
       (*shellOccs)[ii] = 1.0;
     }
   }
@@ -216,11 +216,18 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interacti
    @param state internal state and data of the model, this is not
    checked by DFTB+, just passed around by it
 
+   @param species Species index for atoms in the global structure
+
    @param nAtomicClusters Number of atom centred clusters
 
-   @param indexAtomicClusters starting index for
+   @param indexAtomicClusters starting index for location of
+   coordinates
 
-   @param atomicClusters
+   @param atomicClusters Geometric clusters centred on atoms for the
+   onsite matrix element predictions
+
+   @param clusterGlobalAtNos Numbers of atoms in clusters in the
+   global system
 
    @param message return message, in event of routine failure
    (return != 0)
@@ -229,8 +236,9 @@ int initialise_model_for_dftbp(int* nspecies, char* species[], double* interacti
    message to check
 
 */
-int update_model_for_dftbp(intptr_t *state, int* nAtomicClusters, int* indexAtomicClusters,
-                           double* atomicClusters, char* message) {
+int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
+                           int* indexAtomicClusters, double* atomicClusters,
+                           int* clusterGlobalAtNos, char* message) {
 
   // map pointer back to structure
   typeof(mystate)* internalState = (typeof(mystate)*) *state;
@@ -318,7 +326,9 @@ int predict_model_for_dftbp(intptr_t *state, double* h0, int* h0Index, int* h0In
     h0[iStart] = (double)(ii+1);
   }
 
-  // blank return message if nothing happening
+
+
+  // blank return message if nothing failing
   sprintf(message, "\n");
   return 0;
 

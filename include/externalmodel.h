@@ -109,7 +109,7 @@ extern "C" {
      message to check
 
    */
-  int initialise_model_for_dftbp(int* nspecies, char* species[], double* interactionCutoff,
+  int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* interactionCutoff,
                                  double* environmentCutoff, int* nShellsOnSpecies[], int** shells,
                                  double** shellOccs, intptr_t *state, char* message);
 
@@ -121,6 +121,19 @@ extern "C" {
      @param state internal state and data of the model, this is not
      checke by DFTB+, just passed around by it
 
+     @param species Species index for atoms in the global structure
+
+     @param nAtomicClusters Number of atom centred clusters
+
+     @param indexAtomicClusters starting index for location of
+     coordinates
+
+     @param atomicClusters Geometric clusters centred on atoms for the
+     onsite matrix element predictions
+
+     @param clusterGlobalAtNos Numbers of atoms in clusters in the
+     global system
+
      @param message return message, in event of routine failure
      (return != 0)
 
@@ -128,8 +141,10 @@ extern "C" {
      message to check
 
    */
-  int update_model_for_dftbp(intptr_t *state, int* nAtomicClusters, int* indexAtomicClusters,
-                             double* atomicClusters, char* message);
+  int update_model_for_dftbp(intptr_t *state, int* species,
+                             int* nAtomicClusters, int* indexAtomicClusters,
+                             double* atomicClusters, int* clusterGlobalAtNos,
+                             char* message);
 
 
   /**
