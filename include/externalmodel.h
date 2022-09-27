@@ -48,15 +48,18 @@ extern "C" {
 
     // References to data structures from DFTB+
 
+    int* globalSpeciesOfAtoms;
+
     int nAtomClusters;
     int* indexAtomicClusters;
     double* atomicClusters;
+    int* clusterGlobalAtNos;
 
-    // internal model parameters and state
-
-    float onsites[2]; // H and C alph
-    float hopping[3]; // H-H, H-C and C-C beta
-    float cutoffs[3]; // H-H, H-C and C-C cutoff distances, in a.u.
+    // internal model parameters
+    double onsites[2]; // H and C alph
+    double hopping[3]; // H-H, H-C and C-C beta
+    // index from order of chemical species in DFTB+ to this code's parameter ordering
+    int species2params[2];
 
   } mystate;
 

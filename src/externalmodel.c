@@ -94,7 +94,7 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* inter
   *state = (intptr_t) internalState;
 
   FILE *input;
-  int ii, items, nSpeciesPresent;
+  int ii, items;
 
   // Open input file for some constants for this model, assuming it's
   // in the runtime directory
@@ -107,7 +107,7 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* inter
   // read ancillary input file for model parameters and then store
   // them into the model's internal structure, that in turn will get passed
   // around between calls to the model.
-  items = fscanf(input,"%f %f", &internalState->onsites[0], &internalState->onsites[1] );
+  items = fscanf(input, "%lf %lf", &internalState->onsites[0], &internalState->onsites[1] );
   if (items == EOF) {
     sprintf(message, "Toy library malformed end of data file at first line\n");
     return -3;
@@ -116,54 +116,39 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* inter
     sprintf(message, "Toy library malformed first line of data file: %i\n", items);
     return -3;
   }
-  items = fscanf(input,"%f %f %f", &internalState->hopping[0], &internalState->hopping[1],
+  items = fscanf(input, "%lf %lf %lf", &internalState->hopping[0], &internalState->hopping[1],
                  &internalState->hopping[2]);
   if (items == EOF) {
-    sprintf(message, "Toy library malformed end of data file before 2nd line\n");
+    sprintf(message, "Toy library malformed end of data file before 2nd line (hoping integrals)\n");
     return -3;
   }
   if (items != 3) {
     sprintf(message, "Toy library malformed second line of data file\n");
     return -3;
   }
-  items = fscanf(input,"%f %f %f", &internalState->cutoffs[0], &internalState->cutoffs[1],
-                 &internalState->cutoffs[2]);
+  items = fscanf(input, "%lf", interactionCutoff);
   if (items == EOF) {
-    sprintf(message, "Toy library malformed end of data file before 3rd line\n");
+    sprintf(message, "Toy library malformed end of data file before 3rd line (bond cut-off)\n");
     return -3;
   }
-  if (items != 3) {
+  if (items != 1) {
     sprintf(message, "Toy library malformed third line of data file\n");
     return -3;
   }
 
-  // This specific model is only for H and C atoms, so will throw an error otherwise
-  *interactionCutoff = 0.0;
-  nSpeciesPresent = 0;
   for (ii = 0; ii < *nspecies; ii++) {
+    // This specific model is only for H and C atoms, so will throw an error otherwise
     if (strcmp(speciesName[ii], "C") != 0 && strcmp(speciesName[ii], "H") != 0) {
       sprintf(message, "Toy library only knows about C and H atoms, not %s.\n",
               speciesName[ii]);
       return -2;
     }
+    (*internalState).species2params[ii] = -1;
     if (strcmp(speciesName[ii], "H") == 0) {
-      if (*interactionCutoff < (*internalState).cutoffs[0]) {
-        *interactionCutoff = (*internalState).cutoffs[0];
-      }
-      nSpeciesPresent++;
+      (*internalState).species2params[ii] = 0;
     }
     if (strcmp(speciesName[ii], "C") == 0) {
-      if (*interactionCutoff < (*internalState).cutoffs[1]) {
-        *interactionCutoff = (*internalState).cutoffs[1];
-      }
-      nSpeciesPresent++;
-    }
-  }
-  if (nSpeciesPresent > 1) {
-    // check the heteronuclear cutoff as well if both species are
-    // present
-    if (*interactionCutoff < (*internalState).cutoffs[2]) {
-      *interactionCutoff = (*internalState).cutoffs[2];
+      (*internalState).species2params[ii] = 1;
     }
   }
 
@@ -248,13 +233,17 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
     return -1;
   }
 
+  internalState->globalSpeciesOfAtoms = species;
+
   internalState->nAtomClusters = *nAtomicClusters;
   internalState->indexAtomicClusters = indexAtomicClusters;
   internalState->atomicClusters = atomicClusters;
+  internalState->clusterGlobalAtNos = clusterGlobalAtNos;
 
   printf("Number of atomic clusters: %i\n", *nAtomicClusters);
 
 
+  /*
   for (int ii=0; ii<*nAtomicClusters; ii++) {
     printf("Atom index %i %i:%i\n", ii+1, indexAtomicClusters[ii],
            indexAtomicClusters[ii+1]-1);
@@ -263,7 +252,8 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
       printf("%f %f %f\n", 0.529177249*atomicClusters[kk],
              0.529177249*atomicClusters[kk+1], 0.529177249*atomicClusters[kk+2]);
     }
-  }
+    }
+  */
 
   printf("On-site energies internally : H %f, C %f\n", (*internalState).onsites[0],
          (*internalState).onsites[1]);
@@ -295,37 +285,57 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
 int predict_model_for_dftbp(intptr_t *state, double* h0, int* h0Index, int* h0IndexStride,
                               int* nElemPerAtom, char* message) {
 
-  int iStart, iEnd, jj;
+  int jj;
 
   typeof(mystate)* internalState = (typeof(mystate)*) *state;
 
-  printf("\nInternal check for predict_model_for_dftbp, Model is initialised? ");
-  printf((*internalState).initialised ? "true\n" : "false\n");
+  //printf("On-site energies : H %f, C %f\n", (*internalState).onsites[0],
+  //       (*internalState).onsites[1]);
 
-  printf("On-site energies : H %f, C %f\n", (*internalState).onsites[0],
-         (*internalState).onsites[1]);
-
-  printf("Update time: atomic clusters %i\n", (*internalState).nAtomClusters);
-
+  /*
   for (int ii=0; ii<(*internalState).nAtomClusters; ii++) {
+    // Print out cluster of atoms surrounding each atom
     iStart = *((*internalState).indexAtomicClusters+ii);
     iEnd = *((*internalState).indexAtomicClusters+ii+1)-1;
     printf("Atom index %i %i:%i\n", ii+1, iStart, iEnd-1);
     for (int jj=iStart-1; jj<iEnd; jj++) {
       int kk = 3*jj;
-      printf("%f %f %f\n", 0.529177249 * *((*internalState).atomicClusters+kk),
+      int ll = *((*internalState).clusterGlobalAtNos+jj);
+      int mm = *((*internalState).globalSpeciesOfAtoms+ll-1);
+      printf("%i %i %f %f %f\n", ll, mm,
+	     0.529177249 * *((*internalState).atomicClusters+kk),
              0.529177249 * *((*internalState).atomicClusters+kk+1),
              0.529177249 * *((*internalState).atomicClusters+kk+2));
     }
   }
+  */
 
+  // On-site matrix elements
   for (int ii=0; ii<(*internalState).nAtomClusters; ii++) {
-    jj = ii * *h0IndexStride;
-    iStart = h0Index[jj];
-    printf("Index %i %i %i\n", ii, jj, iStart);
-    h0[iStart] = (double)(ii+1);
-  }
+    jj = ii * *h0IndexStride; // stride on h0Index 2D array
+    // Start of on-site block for atom ii in H0 matrix:
+    int iStart = h0Index[jj];
+    int iAtom = *((*internalState).clusterGlobalAtNos+ii);
+    int iSpecies = *((*internalState).globalSpeciesOfAtoms+iAtom-1);
+    int iParam = (*internalState).species2params[iSpecies-1];
+    printf("Index %i %i %i %i %i\n", ii, jj, iStart, iSpecies, iParam);
+    h0[iStart] = (*internalState).onsites[iParam];
 
+    /*
+    int iAtStart = *((*internalState).indexAtomicClusters+ii);
+    int iAtEnd = *((*internalState).indexAtomicClusters+ii+1)-1;
+    // Loop over surounding atoms in cluster, and add an (unphysical) shift to onsite energies
+    for (int jj=iAtStart; jj<iAtEnd; jj++) {
+      int kk = 3*jj;
+      int ll = *((*internalState).clusterGlobalAtNos+jj);
+      int mm = *((*internalState).globalSpeciesOfAtoms+ll-1);
+      printf("%i %i %f %f %f\n", ll, mm,
+	     0.529177249 * *((*internalState).atomicClusters+kk),
+             0.529177249 * *((*internalState).atomicClusters+kk+1),
+             0.529177249 * *((*internalState).atomicClusters+kk+2));
+    }
+    */
+  }
 
 
   // blank return message if nothing failing
