@@ -183,9 +183,15 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* inter
   printf(" Initial on-site energies : H %f, C %f\n", (*internalState).onsites[0],
          (*internalState).onsites[1]);
 
-  (*internalState).nAtomClusters = 0;
+  (*internalState).nAtomicClusters = 0;
   (*internalState).indexAtomicClusters = NULL;
   (*internalState).atomicClusters = NULL;
+  (*internalState).atomicGlobalAtNos = NULL;
+
+  (*internalState).nBndClusters = 0;
+  (*internalState).indexBndClusters = NULL;
+  (*internalState).bndClusters = NULL;
+  (*internalState).bndGlobalAtNos = NULL;
 
   // blank return message if nothing happening
   sprintf(message, "\n");
@@ -211,7 +217,18 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* inter
    @param atomicClusters Geometric clusters centred on atoms for the
    onsite matrix element predictions
 
-   @param clusterGlobalAtNos Numbers of atoms in clusters in the
+   @param atomicGlobalAtNos Numbers of atoms in clusters in the
+   global system
+
+   @param nBndClusters Number of atom centred clusters
+
+   @param indexBndClusters starting index for location of
+   coordinates
+
+   @param bndClusters Geometric clusters centred on atoms for the
+   onsite matrix element predictions
+
+   @param bndGlobalAtNos Numbers of atoms in clusters in the
    global system
 
    @param message return message, in event of routine failure
@@ -223,7 +240,9 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* inter
 */
 int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
                            int* indexAtomicClusters, double* atomicClusters,
-                           int* clusterGlobalAtNos, char* message) {
+                           int* atomicGlobalAtNos, int* nBndClusters,
+                           int* indexBndClusters, double* bndClusters,
+                           int* bndGlobalAtNos, char* message) {
 
   // map pointer back to structure
   typeof(mystate)* internalState = (typeof(mystate)*) *state;
@@ -235,25 +254,19 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
 
   internalState->globalSpeciesOfAtoms = species;
 
-  internalState->nAtomClusters = *nAtomicClusters;
+  internalState->nAtomicClusters = *nAtomicClusters;
   internalState->indexAtomicClusters = indexAtomicClusters;
   internalState->atomicClusters = atomicClusters;
-  internalState->clusterGlobalAtNos = clusterGlobalAtNos;
+  internalState->atomicGlobalAtNos = atomicGlobalAtNos;
 
   printf("Number of atomic clusters: %i\n", *nAtomicClusters);
 
+  internalState->nBndClusters = *nBndClusters;
+  internalState->indexBndClusters = indexBndClusters;
+  internalState->bndClusters = bndClusters;
+  internalState->bndGlobalAtNos = bndGlobalAtNos;
 
-  /*
-  for (int ii=0; ii<*nAtomicClusters; ii++) {
-    printf("Atom index %i %i:%i\n", ii+1, indexAtomicClusters[ii],
-           indexAtomicClusters[ii+1]-1);
-    for (int jj=indexAtomicClusters[ii]-1; jj<indexAtomicClusters[ii+1]-1; jj++) {
-      int kk = 3*jj;
-      printf("%f %f %f\n", 0.529177249*atomicClusters[kk],
-             0.529177249*atomicClusters[kk+1], 0.529177249*atomicClusters[kk+2]);
-    }
-    }
-  */
+  printf("Number of bond clusters: %i\n", *nBndClusters);
 
   printf("On-site energies internally : H %f, C %f\n", (*internalState).onsites[0],
          (*internalState).onsites[1]);
@@ -289,21 +302,18 @@ int predict_model_for_dftbp(intptr_t *state, double* h0, int* h0Index, int* h0In
 
   typeof(mystate)* internalState = (typeof(mystate)*) *state;
 
-  //printf("On-site energies : H %f, C %f\n", (*internalState).onsites[0],
-  //       (*internalState).onsites[1]);
-
   /*
-  for (int ii=0; ii<(*internalState).nAtomClusters; ii++) {
+  for (int ii=0; ii<(*internalState).nAtomicClusters; ii++) {
     // Print out cluster of atoms surrounding each atom
     iStart = *((*internalState).indexAtomicClusters+ii);
     iEnd = *((*internalState).indexAtomicClusters+ii+1)-1;
     printf("Atom index %i %i:%i\n", ii+1, iStart, iEnd-1);
     for (int jj=iStart-1; jj<iEnd; jj++) {
       int kk = 3*jj;
-      int ll = *((*internalState).clusterGlobalAtNos+jj);
+      int ll = *((*internalState).atomicGlobalAtNos+jj);
       int mm = *((*internalState).globalSpeciesOfAtoms+ll-1);
       printf("%i %i %f %f %f\n", ll, mm,
-	     0.529177249 * *((*internalState).atomicClusters+kk),
+             0.529177249 * *((*internalState).atomicClusters+kk),
              0.529177249 * *((*internalState).atomicClusters+kk+1),
              0.529177249 * *((*internalState).atomicClusters+kk+2));
     }
@@ -311,32 +321,27 @@ int predict_model_for_dftbp(intptr_t *state, double* h0, int* h0Index, int* h0In
   */
 
   // On-site matrix elements
-  for (int ii=0; ii<(*internalState).nAtomClusters; ii++) {
+  for (int ii=0; ii<(*internalState).nAtomicClusters; ii++) {
     jj = ii * *h0IndexStride; // stride on h0Index 2D array
     // Start of on-site block for atom ii in H0 matrix:
     int iStart = h0Index[jj];
-    int iAtom = *((*internalState).clusterGlobalAtNos+ii);
+    int iAtom = *((*internalState).atomicGlobalAtNos+ii);
+
     int iSpecies = *((*internalState).globalSpeciesOfAtoms+iAtom-1);
     int iParam = (*internalState).species2params[iSpecies-1];
-    printf("Index %i %i %i %i %i\n", ii, jj, iStart, iSpecies, iParam);
-    h0[iStart] = (*internalState).onsites[iParam];
 
-    /*
-    int iAtStart = *((*internalState).indexAtomicClusters+ii);
-    int iAtEnd = *((*internalState).indexAtomicClusters+ii+1)-1;
-    // Loop over surounding atoms in cluster, and add an (unphysical) shift to onsite energies
-    for (int jj=iAtStart; jj<iAtEnd; jj++) {
-      int kk = 3*jj;
-      int ll = *((*internalState).clusterGlobalAtNos+jj);
-      int mm = *((*internalState).globalSpeciesOfAtoms+ll-1);
-      printf("%i %i %f %f %f\n", ll, mm,
-	     0.529177249 * *((*internalState).atomicClusters+kk),
-             0.529177249 * *((*internalState).atomicClusters+kk+1),
-             0.529177249 * *((*internalState).atomicClusters+kk+2));
-    }
-    */
+    // simple use of onsite energies
+    h0[iStart] = (*internalState).onsites[iParam];
   }
 
+  // off-site (diatomic) elements
+  for (int ii=0; ii<(*internalState).nAtomicClusters; ii++) {
+    jj = ii * *h0IndexStride;
+    for (int kk=1; kk<=nElemPerAtom[ii] ; kk++) {
+      int ll = h0Index[jj+kk];
+      h0[ll] = 0.1;
+    }
+  }
 
   // blank return message if nothing failing
   sprintf(message, "\n");

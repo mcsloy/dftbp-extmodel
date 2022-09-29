@@ -50,10 +50,17 @@ extern "C" {
 
     int* globalSpeciesOfAtoms;
 
-    int nAtomClusters;
+    // Clusters around atom sites
+    int nAtomicClusters;
     int* indexAtomicClusters;
     double* atomicClusters;
-    int* clusterGlobalAtNos;
+    int* atomicGlobalAtNos;
+
+    // Clusters around diatomic bonds
+    int nBndClusters;
+    int* indexBndClusters;
+    double* bndClusters;
+    int* bndGlobalAtNos;
 
     // internal model parameters
     double onsites[2]; // H and C alph
@@ -129,12 +136,23 @@ extern "C" {
      @param nAtomicClusters Number of atom centred clusters
 
      @param indexAtomicClusters starting index for location of
-     coordinates
+     coordinates in the atomicClusters array
 
      @param atomicClusters Geometric clusters centred on atoms for the
      onsite matrix element predictions
 
-     @param clusterGlobalAtNos Numbers of atoms in clusters in the
+     @param atomicGlobalAtNos Numbers of atoms from clusters in the
+     global system
+
+     @param nBndClusters Number of bond centred clusters
+
+     @param indexBndClusters starting index for location of
+     coordinates in the bndClusters array
+
+     @param bndClusters Geometric clusters centred on bonds for the
+     diatomic matrix element predictions
+
+     @param bndGlobalAtNos Numbers of atoms from bond clusters in the
      global system
 
      @param message return message, in event of routine failure
@@ -146,8 +164,9 @@ extern "C" {
    */
   int update_model_for_dftbp(intptr_t *state, int* species,
                              int* nAtomicClusters, int* indexAtomicClusters,
-                             double* atomicClusters, int* clusterGlobalAtNos,
-                             char* message);
+                             double* atomicClusters, int* atomicGlobalAtNos,
+                             int* nBndClusters, int* indexBndClusters, double* bndClusters,
+                             int* bndGlobalAtNos, char* message);
 
 
   /**
