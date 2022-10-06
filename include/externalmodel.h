@@ -1,6 +1,6 @@
 /**
    @brief
-   Headers for example external model for the DFTB+ project:
+   Headers for an example external model for the DFTB+ project:
    www.dftbplus.org Copyright (C) 2022 B. Hourahine
 
    See the LICENSE file for terms of usage and distribution.
@@ -22,10 +22,12 @@ extern "C" {
     /** Can this library deliver a hamiltonian to the calling code? */
     bool hamiltonian;
 
-    /** Can this library deliver an overlap matrix (i.e. is a non-orthogonal model)? */
+    /** Can this library deliver an overlap matrix (i.e. is a
+	non-orthogonal model)? */
     bool overlap;
 
-    /** Does this library deliver energy terms (other than the band-structure energy)? */
+    /** Does this library deliver energy terms (other than the
+	band-structure energy)? */
     bool energy;
 
     /** Order of derivatives returned by the model */
@@ -34,41 +36,58 @@ extern "C" {
     /** Is the model self-consistent */
     bool selfconsistent;
 
-    /** Number of spin channels supported by model (none:0, collinear:1, non-collinear:3) */
+    /** Number of spin channels supported by model (none:0,
+	collinear:1, non-collinear:3) */
     int spinchannels;
 
   } mycapabilities;
 
 
-  /** Internal state of this model, including any initialisation passed
-      in from DFTB+, any data read in, checks for state, etc. */
-  typedef struct {
+/** Internal state of this model, including any initialisation passed
+    in from DFTB+, any data read in, checks for state, etc.
+*/
+struct mystate {
 
-    bool initialised;
+  // Is this structure initialised
+  bool initialised;
 
-    // References to data structures from DFTB+
+  // References to data structures from DFTB+
 
-    int* globalSpeciesOfAtoms;
+  // Chemical species of atoms in global geometric structure
+  int* globalSpeciesOfAtoms;
 
-    // Clusters around atom sites
-    int nAtomicClusters;
-    int* indexAtomicClusters;
-    double* atomicClusters;
-    int* atomicGlobalAtNos;
+  // Clusters around atom sites
 
-    // Clusters around diatomic bonds
-    int nBndClusters;
-    int* indexBndClusters;
-    double* bndClusters;
-    int* bndGlobalAtNos;
+  // Number of atom centred clusters
+  int nAtomicClusters;
+  // Index for where the cluster starts in the following two arrays
+  int* indexAtomicClusters;
+  // Geometries of clusters
+  double* atomicClusters;
+  // Numbering for the atoms of the cluster in the original (global)
+  // geometry of the system
+  int* atomicGlobalAtNos;
 
-    // internal model parameters
-    double onsites[2]; // H and C alph
-    double hopping[3]; // H-H, H-C and C-C beta
-    // index from order of chemical species in DFTB+ to this code's parameter ordering
-    int species2params[2];
+  // Clusters around diatomic bonds
 
-  } mystate;
+  // Number of bond clusters
+  int nBndClusters;
+  // Index for where the cluster starts in the following two arrays
+  int* indexBndClusters;
+  // coordinates in the clusters
+  double* bndClusters;
+  // Numbering for the atoms of the cluster in the original (global)
+  // geometry of the system
+  int* bndGlobalAtNos;
+
+  // internal model parameters
+  double onsites[3]; // Hs, Cs and Cs* alpha
+  double hopping[3]; // H-H, H-C and C-C beta
+  // index from order of chemical species in DFTB+ to this code's
+  // parameter ordering:
+  int species2params[2];
+
+};
 
 
   /**
@@ -90,7 +109,8 @@ extern "C" {
      @param capabilities structure with capabilities of the model
 
   */
-  void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities);
+  void dftbp_provided_with(char* modelname,
+			   typeof (mycapabilities) *capabilities);
 
   /**
      Set up this model, read some settings from DFTB+ over it's
@@ -98,30 +118,45 @@ extern "C" {
      handling via DFTB+.
 
      @param nspecies number of chemical species/types present
-     @param species array of null terminated strings labelling chemical species
-     @param interactionCutoff Longest cutoff for, i.e. distance over which
-     atoms of each species have hamiltonian or repulsive interactions
+
+     @param species array of null terminated strings labelling
+     chemical species
+
+     @param interactionCutoff Longest cutoff for, i.e. distance over
+     which atoms of each species have hamiltonian or repulsive
+     interactions
+
      @param environmentCutoff Distance over which neighbours influence
      interactions, i,e. 0 if model is environmentally independent, or
      nearest-neighbour/longer if surrounding atoms influence
      interactions. This is used to cut out local clusters of around
      the interacting atom/dimer
-     @param nShellsOnSpecies number of shells of atomic orbitals, set to 0 if not
-     a hamiltonian model
+
+     @param nShellsOnSpecies number of shells of atomic orbitals, set
+     to 0 if not a hamiltonian model
+
      @param shells Angular momentum of shells species resolved atomic
      shells, freed on return to DFTB+
-     @param shellOccs Reference occupation for neutrality, freed on return to DFTB+
+
+     @param shellOccs Reference occupation for neutrality, freed on
+     return to DFTB+
+
      @param state internal state and data of the model, not checked by
      DFTB+, just passed around
-     @param message return message, in event of routine failure (return != 0)
+
+     @param message return message, in event of routine failure
+     (return != 0)
 
      @return 0 on successful return, non-zero if there is an error
      message to check
 
    */
-  int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* interactionCutoff,
-                                 double* environmentCutoff, int* nShellsOnSpecies[], int** shells,
-                                 double** shellOccs, intptr_t *state, char* message);
+  int initialise_model_for_dftbp(int* nspecies, char* speciesName[],
+				 double* interactionCutoff,
+				 double* environmentCutoff,
+				 int* nShellsOnSpecies[], int** shells,
+                                 double** shellOccs, intptr_t *state,
+				 char* message);
 
 
     /**
@@ -165,8 +200,9 @@ extern "C" {
   int update_model_for_dftbp(intptr_t *state, int* species,
                              int* nAtomicClusters, int* indexAtomicClusters,
                              double* atomicClusters, int* atomicGlobalAtNos,
-                             int* nBndClusters, int* indexBndClusters, double* bndClusters,
-                             int* bndGlobalAtNos, char* message);
+                             int* nBndClusters, int* indexBndClusters,
+			     double* bndClusters, int* bndGlobalAtNos,
+			     char* message);
 
 
   /**
@@ -186,8 +222,9 @@ extern "C" {
       message to check
 
   */
-  int predict_model_for_dftbp(intptr_t *state, double* h0, int* h0Index, int* h0IndexStride,
-                              int* nElemPerAtom, char* message);
+  int predict_model_for_dftbp(intptr_t *state, double *h0, int* h0Index,
+                              int* h0IndexStride, int* nElemPerAtom,
+			      char* message);
 
 
   /**
@@ -204,7 +241,7 @@ extern "C" {
      message to check
 
   */
-  int cleanup_model_for_dftbp(intptr_t *state, char* message);
+  void cleanup_model_for_dftbp(intptr_t *state);
   
 #ifdef __cplusplus
 }

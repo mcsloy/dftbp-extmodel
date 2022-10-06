@@ -9,88 +9,54 @@ See the LICENSE file for terms of usage and distribution.
 @file
 */
 
+#include <math.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
-#include <stdint.h>
 #include "../include/externalmodel.h"
 
-
-/**
-   Combined application programming interface and application binary
-   interface semantic version, as supported by this library. Note, the
-   format and is externally defined in the DFTB+ project
-
-   @param major Major version, revised on breaking changes
-   @param minor Minor version, revised on extensions
-   @param patch Patch version, revised on invisible changes
-
-*/
-void dftbp_model_apbi(int* major, int* minor, int* patch){
+// Project version
+void dftbp_model_apbi(int* major, int* minor, int* patch)
+{
   *major = 0;
   *minor = 1;
   *patch = 0;
 }
 
 
-/**
-   Declare capabilities of this model to DFTB+ via the external model
-   API.
-
-   @param modelname null terminated string for name of this model
-   @param capabilities structure with capabilities of the model
-
-*/
-void dftbp_provided_with(char* modelname, typeof (mycapabilities) *capabilities){
+// Declare capabilities of this model to DFTB+
+void dftbp_provided_with(char* modelname,
+                         typeof (mycapabilities) *capabilities)
+{
 
   // Name of external model
   sprintf(modelname, "Huckel toy model");
 
   // flags for capabilities of this specific model
   *capabilities = (mycapabilities) {
-    .hamiltonian = true, .overlap = false, .energy = false, .derivativeOrder = 0,
-    .selfconsistent = false, .spinchannels = 0
+    .hamiltonian = true, .overlap = false, .energy = false,
+    .derivativeOrder = 0, .selfconsistent = false, .spinchannels = 0
   };
 
   return;
 }
 
-/**
-   Set up this model, read some settings from DFTB+ over it's external
-   model API and initialise it's data structure for handling via
-   DFTB+.
 
-   @param nspecies number of chemical species/types present
-   @param species array of null terminated strings labelling chemical species
-   @param interactionCutoff array of cutoffs for distance over which
-   atoms of each species have interactions (i.e. diatomic matrix
-   elements or repulsive contributions)
-   @param environmentCutoff Distance over which neighbours influence
-   interactions, i,e. 0 if model is environmentally independent, or
-   nearest-neighbour/longer if surrounding atoms influence
-   interactions. This is used to cut out local clusters of around
-   the interacting atom/dimer
-   @param nShellsOnSpecies number of shells of atomic orbitals, set to 0 if not
-   a hamiltonian model
-   @param shellLValues Angular momentum of shells species resolved atomic
-   shells, freed on return to DFTB+
-   @param shellOccs Reference occupation for neutrality, freed on return to DFTB+
-   @param state internal state and data of the model, not checked in
-   DFTB+, just passed around
-   @param message return message, in event of routine failure (return != 0)
+// Initialise this model, reading some settings from DFTB+
+int initialise_model_for_dftbp(int* nspecies, char* speciesName[],
+                               double* interactionCutoff,
+                               double* environmentCutoff,
+                               int** nShellsOnSpecies,
+                               int** shellLValues, double** shellOccs,
+                               intptr_t *state, char* message)
+{
 
-   @return 0 on successful return, non-zero if there is an error
-   message to check
-
-*/
-int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* interactionCutoff,
-                               double* environmentCutoff, int** nShellsOnSpecies,
-                               int** shellLValues, double** shellOccs, intptr_t *state,
-                               char* message) {
-
-  // Allocate structure for internal state, and generate intptr for return to DFTB+
-  typeof(mystate)* internalState = (typeof(mystate)*) malloc(sizeof(typeof(mystate)));
+  // Allocate structure for internal state, and generate am intptr for
+  // return to DFTB+
+  struct mystate* internalState = (struct mystate*)
+    malloc(sizeof(struct mystate));
   *state = (intptr_t) internalState;
 
   FILE *input;
@@ -107,19 +73,22 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* inter
   // read ancillary input file for model parameters and then store
   // them into the model's internal structure, that in turn will get passed
   // around between calls to the model.
-  items = fscanf(input, "%lf %lf", &internalState->onsites[0], &internalState->onsites[1] );
+  items = fscanf(input, "%lf %lf %lf", &internalState->onsites[0],
+                 &internalState->onsites[1], &internalState->onsites[2]);
   if (items == EOF) {
     sprintf(message, "Toy library malformed end of data file at first line\n");
     return -3;
   }
-  if (items != 2) {
-    sprintf(message, "Toy library malformed first line of data file: %i\n", items);
+  if (items != 3) {
+    sprintf(message, "Toy library malformed first line of data file: %i\n",
+	    items);
     return -3;
   }
-  items = fscanf(input, "%lf %lf %lf", &internalState->hopping[0], &internalState->hopping[1],
-                 &internalState->hopping[2]);
+  items = fscanf(input, "%lf %lf %lf", &internalState->hopping[0],
+		 &internalState->hopping[1], &internalState->hopping[2]);
   if (items == EOF) {
-    sprintf(message, "Toy library malformed end of data file before 2nd line (hoping integrals)\n");
+    sprintf(message, "Toy library malformed end of data file before 2nd line"
+	    " (hoping integrals)\n");
     return -3;
   }
   if (items != 3) {
@@ -128,7 +97,8 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* inter
   }
   items = fscanf(input, "%lf", interactionCutoff);
   if (items == EOF) {
-    sprintf(message, "Toy library malformed end of data file before 3rd line (bond cut-off)\n");
+    sprintf(message, "Toy library malformed end of data file before 3rd line"
+	    " (bond cut-off)\n");
     return -3;
   }
   if (items != 1) {
@@ -137,13 +107,15 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* inter
   }
 
   for (ii = 0; ii < *nspecies; ii++) {
-    // This specific model is only for H and C atoms, so will throw an error otherwise
-    if (strcmp(speciesName[ii], "C") != 0 && strcmp(speciesName[ii], "H") != 0) {
-      sprintf(message, "Toy library only knows about C and H atoms, not %s.\n",
-              speciesName[ii]);
-      return -2;
-    }
-    (*internalState).species2params[ii] = -1;
+    // This specific model is only for H and C atoms, so will throw an
+    // error otherwise
+    if (strcmp(speciesName[ii], "C") != 0 && strcmp(speciesName[ii], "H") != 0)
+      {
+	sprintf(message,
+		"Toy library only knows about C and H atoms, not %s.\n",
+		speciesName[ii]);
+	return -2;
+      }
     if (strcmp(speciesName[ii], "H") == 0) {
       (*internalState).species2params[ii] = 0;
     }
@@ -152,46 +124,67 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* inter
     }
   }
 
-  /* Surroundings required around atoms and bonds: */
+  // Surroundings required around atoms and bonds:
   *environmentCutoff = 4.0;
 
-  /* This particular model is Huckel-like, so only a single shells on
-     each species containing an s-like orbital, irrespective of
-     species. Note count for shells uses Fortran convention starting
-     at 1, while L uses physics convention of s=0 */
-  *nShellsOnSpecies =  malloc(*nspecies * sizeof(int));
-  *shellLValues =  malloc(*nspecies * 1 * sizeof(int));
+  // Maximum number of shells of orbitals on atoms in this model
+  int maxShells = 2;
+
+  /* This particular model is so only a single s shell on H and two s
+     shells on C Note count for shells uses Fortran convention
+     starting at 1, while L uses physics convention of s=0 */
+  *nShellsOnSpecies =  calloc(*nspecies, sizeof(int));
+  // Note, this will be a fortran array on the other end, so
+  // [nSpecies][maxShells] (hence the 2):
+  *shellLValues =  calloc(*nspecies * maxShells, sizeof(int));
   for (ii=0; ii<*nspecies; ii++) {
-    (*nShellsOnSpecies)[ii] = 1;
-    (*shellLValues)[ii] = 0;
+    if ((*internalState).species2params[ii] == 0)
+      {
+        // Hydrogen, s
+        (*nShellsOnSpecies)[ii] = 1;
+        (*shellLValues)[ii] = 0;
+      } else
+      {
+        // Carbon, s and s* shells
+        (*nShellsOnSpecies)[ii] = 2;
+        (*shellLValues)[ii] = 0;
+        (*shellLValues)[ii+1] = 0;
+      }
   }
 
   // each atom is neutral when it's single shell containing only one
   // electron:
-  *shellOccs =  malloc(*nspecies * 1 * sizeof(double));
+  *shellOccs =  calloc(*nspecies * maxShells, sizeof(double));
   for (ii=0; ii<*nspecies; ii++) {
-    if (strcmp(speciesName[ii], "C") == 0) {
-      (*shellOccs)[ii] = 1.0;
-    }
-    if (strcmp(speciesName[ii], "H") == 0) {
-      (*shellOccs)[ii] = 1.0;
+    int jj = ii * maxShells;
+    if ((*internalState).species2params[ii] == 0)
+      {
+        // H atom, the s orbital is occupied
+        (*shellOccs)[jj] = 1.0;
+      } else {
+      // C atom, only the s orbital is occupied
+      (*shellOccs)[jj] = 1.0;
     }
   }
 
   (*internalState).initialised = true;
 
-  printf(" Initial on-site energies : H %f, C %f\n", (*internalState).onsites[0],
-         (*internalState).onsites[1]);
+  printf(" Initial on-site energies : H %f, C %f %f\n",
+         (*internalState).onsites[0], (*internalState).onsites[1],
+	 (*internalState).onsites[2]);
+
 
   (*internalState).nAtomicClusters = 0;
   (*internalState).indexAtomicClusters = NULL;
   (*internalState).atomicClusters = NULL;
   (*internalState).atomicGlobalAtNos = NULL;
 
+  /*
   (*internalState).nBndClusters = 0;
   (*internalState).indexBndClusters = NULL;
   (*internalState).bndClusters = NULL;
   (*internalState).bndGlobalAtNos = NULL;
+  */
 
   // blank return message if nothing happening
   sprintf(message, "\n");
@@ -200,57 +193,22 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[], double* inter
 }
 
 
-/**
-   Update this model, using geometric and other information from DFTB+
-   over it's external model API.
-
-   @param state internal state and data of the model, this is not
-   checked by DFTB+, just passed around by it
-
-   @param species Species index for atoms in the global structure
-
-   @param nAtomicClusters Number of atom centred clusters
-
-   @param indexAtomicClusters starting index for location of
-   coordinates
-
-   @param atomicClusters Geometric clusters centred on atoms for the
-   onsite matrix element predictions
-
-   @param atomicGlobalAtNos Numbers of atoms in clusters in the
-   global system
-
-   @param nBndClusters Number of atom centred clusters
-
-   @param indexBndClusters starting index for location of
-   coordinates
-
-   @param bndClusters Geometric clusters centred on atoms for the
-   onsite matrix element predictions
-
-   @param bndGlobalAtNos Numbers of atoms in clusters in the
-   global system
-
-   @param message return message, in event of routine failure
-   (return != 0)
-
-   @return 0 on successful return, non-zero if there is an error
-   message to check
-
-*/
+// Update this model, using geometric and other information from DFTB+
 int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
                            int* indexAtomicClusters, double* atomicClusters,
                            int* atomicGlobalAtNos, int* nBndClusters,
                            int* indexBndClusters, double* bndClusters,
-                           int* bndGlobalAtNos, char* message) {
+                           int* bndGlobalAtNos, char* message)
+{
 
   // map pointer back to structure
-  typeof(mystate)* internalState = (typeof(mystate)*) *state;
+  struct mystate* internalState = (struct mystate*) *state;
 
   if (!(*internalState).initialised) {
     sprintf(message, "Model is not properly initialised");
     return -1;
   }
+
 
   internalState->globalSpeciesOfAtoms = species;
 
@@ -268,8 +226,9 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
 
   printf("Number of bond clusters: %i\n", *nBndClusters);
 
-  printf("On-site energies internally : H %f, C %f\n", (*internalState).onsites[0],
-         (*internalState).onsites[1]);
+  printf(" Initial on-site energies : H %f, C %f %f\n",
+         (*internalState).onsites[0], (*internalState).onsites[1],
+	 (*internalState).onsites[2]);
 
   // blank return message if nothing happening
   sprintf(message, "\n");
@@ -278,68 +237,105 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
 }
 
 
-/**
-    Get model predictions
-
-    @param state internal state and data of the model, this is not
-    checke by DFTB+, just passed around by it
-
-    @param h0 hamiltonian
-
-    @param h0Index hamiltonian index for blocks of matrix elements
-
-    @param message return message, in event of routine failure
-    (return != 0)
-
-    @return 0 on successful return, non-zero if there is an error
-    message to check
-
-*/
-int predict_model_for_dftbp(intptr_t *state, double* h0, int* h0Index, int* h0IndexStride,
-                              int* nElemPerAtom, char* message) {
+// Get model predictions back to DFTB+
+int predict_model_for_dftbp(intptr_t *state, double *h0, int* h0Index,
+                            int* h0IndexStride, int* nElemPerAtom,
+                            char* message)
+{
 
   int jj;
 
-  typeof(mystate)* internalState = (typeof(mystate)*) *state;
+  struct mystate* internalState = (struct mystate*) *state;
 
-  /*
-  for (int ii=0; ii<(*internalState).nAtomicClusters; ii++) {
-    // Print out cluster of atoms surrounding each atom
-    iStart = *((*internalState).indexAtomicClusters+ii);
-    iEnd = *((*internalState).indexAtomicClusters+ii+1)-1;
-    printf("Atom index %i %i:%i\n", ii+1, iStart, iEnd-1);
-    for (int jj=iStart-1; jj<iEnd; jj++) {
-      int kk = 3*jj;
-      int ll = *((*internalState).atomicGlobalAtNos+jj);
-      int mm = *((*internalState).globalSpeciesOfAtoms+ll-1);
-      printf("%i %i %f %f %f\n", ll, mm,
-             0.529177249 * *((*internalState).atomicClusters+kk),
-             0.529177249 * *((*internalState).atomicClusters+kk+1),
-             0.529177249 * *((*internalState).atomicClusters+kk+2));
-    }
-  }
-  */
-
-  // On-site matrix elements
+  // On-site matrix elements for each atom
   for (int ii=0; ii<(*internalState).nAtomicClusters; ii++) {
     jj = ii * *h0IndexStride; // stride on h0Index 2D array
     // Start of on-site block for atom ii in H0 matrix:
     int iStart = h0Index[jj];
-    int iAtom = *((*internalState).atomicGlobalAtNos+ii);
-
-    int iSpecies = *((*internalState).globalSpeciesOfAtoms+iAtom-1);
-    int iParam = (*internalState).species2params[iSpecies-1];
+    int iAtom = (*internalState).atomicGlobalAtNos[jj];
+    int iSpecies = (*internalState).globalSpeciesOfAtoms[iAtom-1];
 
     // simple use of onsite energies
-    h0[iStart] = (*internalState).onsites[iParam];
+    if ((*internalState).species2params[iSpecies-1] == 0)
+      {
+        h0[iStart] = *((*internalState).onsites);
+      } else
+      {
+        // 2x2 symmetric matrix of s and s* onsites, reshaped as a 4
+        // element vector:
+        h0[iStart] = *((*internalState).onsites+1); // s orbital
+        h0[iStart+3] = *((*internalState).onsites+2); // s* orbital
+      }
   }
 
+  // Toy crystal field model, demonstrating getting atoms in the halo
+  // around each atomic site
+  //
+  // Model affects s and s* mixing on C atoms, but only from any
+  // surrounding H atoms within the environment cutoff distance
+  // (ignoring C). H atoms themselves would be unaffected by their
+  // surroundings, as there is only a single s orbital on those atoms.
+  for (int ii = 0; ii < (*internalState).nAtomicClusters; ii++) {
+    jj = ii * *h0IndexStride; // stride on h0Index 2D array
+    // Start of on-site block for atom ii in H0 matrix:
+    int iAtom = (*internalState).atomicGlobalAtNos[jj];
+    int iSpecies = (*internalState).globalSpeciesOfAtoms[iAtom-1];
+    int iParam = (*internalState).species2params[iSpecies-1];
+    if (iParam == 1) { // C atom at origin of cluster
+      int iStart = h0Index[jj];
+      // Carbon atom, so check it's neighbours
+      int jStart = (*internalState).indexAtomicClusters[ii] - 1;
+      int jEnd = (*internalState).indexAtomicClusters[ii+1] - 1;
+      for (int iAt = jStart; iAt < jEnd; iAt++) {
+        int kk = 3 * iAt;
+        int ll = (*internalState).atomicGlobalAtNos[iAt];
+        int mm = (*internalState).globalSpeciesOfAtoms[ll-1];
+        int jParam = (*internalState).species2params[mm-1];
+        if (jParam == 0) { // H atom in suroundings
+          // distance squared
+          double d2 =
+            (*((*internalState).atomicClusters+kk))
+	    *(*((*internalState).atomicClusters+kk))
+            +(*((*internalState).atomicClusters+kk+1))
+	    *(*((*internalState).atomicClusters+kk+1))
+            +(*((*internalState).atomicClusters+kk+2))
+	    *(*((*internalState).atomicClusters+kk+2));
+	  // scale such that final term is ~1E-12 by 4.0 a.u. cutoff
+          d2 *= -1.0*(6.0/4.0)*(6.0/4.0);
+          h0[iStart+1] += 1000.0*exp(d2);
+          h0[iStart+2] += 1000.0*exp(d2);
+        }
+      }
+    }
+  }
+
+
+
   // off-site (diatomic) elements
-  for (int ii=0; ii<(*internalState).nAtomicClusters; ii++) {
-    jj = ii * *h0IndexStride;
-    for (int kk=1; kk<=nElemPerAtom[ii] ; kk++) {
-      int ll = h0Index[jj+kk];
-      h0[ll] = 0.1;
+  for (int iClust = 0; iClust < (*internalState).nBndClusters; iClust++) {
+    int jAtStart = (*internalState).indexBndClusters[iClust] - 1;
+    int jAtEnd = (*internalState).indexBndClusters[iClust+1] - 1;
+
+    //printf("Cluster %i, %i:%i\n", iClust+1, jAtStart, jAtEnd-1);
+
+    int jOrigAt = (*internalState).bndGlobalAtNos[jAtStart] - 1;
+
+    int iHamBnd = jOrigAt * *h0IndexStride + 1; // stride on h0Index
+						// 2D array
+
+    printf("iHam neigh of %i: %i, %i\n", jOrigAt, iHamBnd,
+	   h0Index[iHamBnd]-1);
+    printf("Bonds from atom %i : %i\n", jOrigAt+1, nElemPerAtom[jOrigAt]);
+
+    // coordinates
+    for (int iAt = jAtStart; iAt < jAtEnd; iAt++) {
+    //  jj = iClust * *h0IndexStride + ;
+    //  printf("Atom in bond cluster %i %i %i\n", iClust, iAt, jj);
+    //  int iStart = h0Index[jj];
+    //  printf("%i\n", iStart);
+    //
+    //  int ll = h0Index[jj+kk];
+    //  h0[ll] += 0.1;
     }
   }
 
@@ -350,37 +346,16 @@ int predict_model_for_dftbp(intptr_t *state, double* h0, int* h0Index, int* h0In
 }
 
 
-/**
-   Clean up after this model, freeing any memory in the mystate type
-
-   @param state internal state and data of the model. This is not
-   checke by DFTB+, just passed around by it, so we need to remove any
-   allocated memory here.
-
-   @param message return message, in event of routine failure
-   (return != 0)
-
-   @return 0 on successful return, non-zero if there is an error
-   message to check
-
-*/
-int cleanup_model_for_dftbp(intptr_t *state, char* message) {
+// Clean up after this model, freeing any memory in the mystate type
+void cleanup_model_for_dftbp(intptr_t *state) {
 
   // DFTB+ only sees integer pointer "state", so need original
   // structure to clean up
-  typeof(mystate)* internalState = (typeof(mystate)*) *state;
+  struct mystate* internalState = (struct mystate*) *state;
 
-  printf("\nInternal check for cleanup_model_for_dftbp, Model is initialised? ");
-  printf((*internalState).initialised ? "true\n" : "false\n");
   printf("Cleaning up\n");
 
   free(internalState);
   *state = (intptr_t) internalState;
-
-  (*internalState).initialised = false;
-
-  // blank return message if nothing happening
-  sprintf(message, "\n");
-  return 0;
 
 }
