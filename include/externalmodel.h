@@ -67,6 +67,8 @@ struct mystate {
   // Numbering for the atoms of the cluster in the original (global)
   // geometry of the system
   int* atomicGlobalAtNos;
+  // Indexing for diatomic elements of H or S matrices
+  int* atomClusterIndex;
 
   // Clusters around diatomic bonds
 
@@ -79,10 +81,13 @@ struct mystate {
   // Numbering for the atoms of the cluster in the original (global)
   // geometry of the system
   int* bndGlobalAtNos;
+  // Indexing for diatomic elements of H or S matrices
+  int* bondClusterIndex;
 
   // internal model parameters
   double onsites[3]; // Hs, Cs and Cs* alpha
-  double hopping[3]; // H-H, H-C and C-C beta
+  double hopping[6]; // Hs-Hs, Hs-Cs, Hs-Cs*, Cs-Cs, Cs-Cs*, Cs*-Cs*
+		     // beta values
   // index from order of chemical species in DFTB+ to this code's
   // parameter ordering:
   int species2params[2];
@@ -190,6 +195,12 @@ struct mystate {
      @param bndGlobalAtNos Numbers of atoms from bond clusters in the
      global system
 
+     @param atomClusterIndex Indexing for where to find atomic
+     (onsite) elements in hamiltonian/overlap matrices
+
+     @param bondClusterIndex Indexing for where to find diatomic
+     (bond) elements in hamiltonian/overlap matrices
+
      @param message return message, in event of routine failure
      (return != 0)
 
@@ -202,7 +213,8 @@ struct mystate {
                              double* atomicClusters, int* atomicGlobalAtNos,
                              int* nBndClusters, int* indexBndClusters,
 			     double* bndClusters, int* bndGlobalAtNos,
-			     char* message);
+			     int* atomClusterIndex, int* bondClusterIndex,
+                             char* message);
 
 
   /**
@@ -213,6 +225,8 @@ struct mystate {
 
       @param h0 hamiltonian
 
+      @param over overlap matrix
+
       @param h0Index hamiltonian index for blocks of matrix elements
 
       @param message return message, in event of routine failure
@@ -222,9 +236,9 @@ struct mystate {
       message to check
 
   */
-  int predict_model_for_dftbp(intptr_t *state, double *h0, int* h0Index,
-                              int* h0IndexStride, int* nElemPerAtom,
-			      char* message);
+  int predict_model_for_dftbp(intptr_t *state, double *h0, double *over,
+                              int* h0Index, int* h0IndexStride,
+                              char* message);
 
 
   /**

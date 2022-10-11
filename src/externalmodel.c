@@ -81,24 +81,26 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[],
   }
   if (items != 3) {
     sprintf(message, "Toy library malformed first line of data file: %i\n",
-	    items);
+            items);
     return -3;
   }
-  items = fscanf(input, "%lf %lf %lf", &internalState->hopping[0],
-		 &internalState->hopping[1], &internalState->hopping[2]);
+  items = fscanf(input, "%lf %lf %lf %lf %lf %lf", &internalState->hopping[0],
+                 &internalState->hopping[1], &internalState->hopping[2],
+		 &internalState->hopping[3], &internalState->hopping[4],
+		 &internalState->hopping[5]);
   if (items == EOF) {
     sprintf(message, "Toy library malformed end of data file before 2nd line"
-	    " (hoping integrals)\n");
+            " (hopping integrals)\n");
     return -3;
   }
-  if (items != 3) {
+  if (items != 6) {
     sprintf(message, "Toy library malformed second line of data file\n");
     return -3;
   }
   items = fscanf(input, "%lf", interactionCutoff);
   if (items == EOF) {
     sprintf(message, "Toy library malformed end of data file before 3rd line"
-	    " (bond cut-off)\n");
+            " (bond cut-off)\n");
     return -3;
   }
   if (items != 1) {
@@ -111,10 +113,10 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[],
     // error otherwise
     if (strcmp(speciesName[ii], "C") != 0 && strcmp(speciesName[ii], "H") != 0)
       {
-	sprintf(message,
-		"Toy library only knows about C and H atoms, not %s.\n",
-		speciesName[ii]);
-	return -2;
+        sprintf(message,
+                "Toy library only knows about C and H atoms, not %s.\n",
+                speciesName[ii]);
+        return -2;
       }
     if (strcmp(speciesName[ii], "H") == 0) {
       (*internalState).species2params[ii] = 0;
@@ -171,7 +173,7 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[],
 
   printf(" Initial on-site energies : H %f, C %f %f\n",
          (*internalState).onsites[0], (*internalState).onsites[1],
-	 (*internalState).onsites[2]);
+         (*internalState).onsites[2]);
 
 
   (*internalState).nAtomicClusters = 0;
@@ -179,12 +181,11 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[],
   (*internalState).atomicClusters = NULL;
   (*internalState).atomicGlobalAtNos = NULL;
 
-  /*
   (*internalState).nBndClusters = 0;
   (*internalState).indexBndClusters = NULL;
   (*internalState).bndClusters = NULL;
   (*internalState).bndGlobalAtNos = NULL;
-  */
+  (*internalState).bondClusterIndex = NULL;
 
   // blank return message if nothing happening
   sprintf(message, "\n");
@@ -198,7 +199,8 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
                            int* indexAtomicClusters, double* atomicClusters,
                            int* atomicGlobalAtNos, int* nBndClusters,
                            int* indexBndClusters, double* bndClusters,
-                           int* bndGlobalAtNos, char* message)
+                           int* bndGlobalAtNos, int* atomClusterIndex,
+                           int* bondClusterIndex, char* message)
 {
 
   // map pointer back to structure
@@ -216,19 +218,22 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
   internalState->indexAtomicClusters = indexAtomicClusters;
   internalState->atomicClusters = atomicClusters;
   internalState->atomicGlobalAtNos = atomicGlobalAtNos;
+  internalState->atomClusterIndex = atomClusterIndex;
 
-  printf("Number of atomic clusters: %i\n", *nAtomicClusters);
+  //printf("Number of atomic clusters: %i\n", *nAtomicClusters);
 
   internalState->nBndClusters = *nBndClusters;
   internalState->indexBndClusters = indexBndClusters;
   internalState->bndClusters = bndClusters;
   internalState->bndGlobalAtNos = bndGlobalAtNos;
+  internalState->bondClusterIndex = bondClusterIndex;
 
-  printf("Number of bond clusters: %i\n", *nBndClusters);
+  //printf("Number of bond clusters: %i\n", *nBndClusters);
 
-  printf(" Initial on-site energies : H %f, C %f %f\n",
+  /*printf(" Initial on-site energies : H %f, C %f %f\n",
          (*internalState).onsites[0], (*internalState).onsites[1],
-	 (*internalState).onsites[2]);
+         (*internalState).onsites[2]);
+  */
 
   // blank return message if nothing happening
   sprintf(message, "\n");
@@ -237,106 +242,155 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
 }
 
 
-// Get model predictions back to DFTB+
-int predict_model_for_dftbp(intptr_t *state, double *h0, int* h0Index,
-                            int* h0IndexStride, int* nElemPerAtom,
+// Make and then get model predictions back to DFTB+
+int predict_model_for_dftbp(intptr_t *state, double *h0, double *over,
+                            int* h0Index, int* h0IndexStride,
                             char* message)
 {
 
-  int jj;
-
   struct mystate* internalState = (struct mystate*) *state;
 
-  // On-site matrix elements for each atom
-  for (int ii=0; ii<(*internalState).nAtomicClusters; ii++) {
-    jj = ii * *h0IndexStride; // stride on h0Index 2D array
-    // Start of on-site block for atom ii in H0 matrix:
-    int iStart = h0Index[jj];
-    int iAtom = (*internalState).atomicGlobalAtNos[jj];
-    int iSpecies = (*internalState).globalSpeciesOfAtoms[iAtom-1];
+  // For this specific model, overlap is ignored, but would be indexed
+  // in the same way as the hamiltonian
+
+  // global atom number == atomic cluster number
+  for (int iAt=0; iAt<(*internalState).nAtomicClusters; iAt++) {
+    // First atom location in species etc. arrays
+    int iStart = (*internalState).atomClusterIndex[iAt];
+    int iSpecies = (*internalState).globalSpeciesOfAtoms[iAt];
+
+    // index for this model's parameter storage, vs the atomic species
+    // indices from DFTB+ :
+    int iParam = (*internalState).species2params[iSpecies-1];
 
     // simple use of onsite energies
-    if ((*internalState).species2params[iSpecies-1] == 0)
+    if (iParam == 0) // H atom
       {
-        h0[iStart] = *((*internalState).onsites);
-      } else
+        h0[iStart] = (*internalState).onsites[0]; // s orbital
+      } else // C atom
       {
         // 2x2 symmetric matrix of s and s* onsites, reshaped as a 4
         // element vector:
-        h0[iStart] = *((*internalState).onsites+1); // s orbital
-        h0[iStart+3] = *((*internalState).onsites+2); // s* orbital
+        h0[iStart] = (*internalState).onsites[1]; // s orbital
+        h0[iStart+3] = (*internalState).onsites[2]; // s* orbital
       }
-  }
 
-  // Toy crystal field model, demonstrating getting atoms in the halo
-  // around each atomic site
-  //
-  // Model affects s and s* mixing on C atoms, but only from any
-  // surrounding H atoms within the environment cutoff distance
-  // (ignoring C). H atoms themselves would be unaffected by their
-  // surroundings, as there is only a single s orbital on those atoms.
-  for (int ii = 0; ii < (*internalState).nAtomicClusters; ii++) {
-    jj = ii * *h0IndexStride; // stride on h0Index 2D array
-    // Start of on-site block for atom ii in H0 matrix:
-    int iAtom = (*internalState).atomicGlobalAtNos[jj];
-    int iSpecies = (*internalState).globalSpeciesOfAtoms[iAtom-1];
-    int iParam = (*internalState).species2params[iSpecies-1];
-    if (iParam == 1) { // C atom at origin of cluster
-      int iStart = h0Index[jj];
-      // Carbon atom, so check it's neighbours
-      int jStart = (*internalState).indexAtomicClusters[ii] - 1;
-      int jEnd = (*internalState).indexAtomicClusters[ii+1] - 1;
-      for (int iAt = jStart; iAt < jEnd; iAt++) {
-        int kk = 3 * iAt;
-        int ll = (*internalState).atomicGlobalAtNos[iAt];
-        int mm = (*internalState).globalSpeciesOfAtoms[ll-1];
-        int jParam = (*internalState).species2params[mm-1];
-        if (jParam == 0) { // H atom in suroundings
+
+    // Toy crystal field model, demonstrating getting positions and
+    // species of atoms in the halo around each atomic site in the
+    // geometry
+    //
+    // Model affects s and s* mixing on C atoms, but only due to the
+    // presence of any surrounding H atoms within the environment
+    // cutoff distance (ignoring any surrounding C). H atoms
+    // themselves would be unaffected by crystal field terms from
+    // their surroundings, as there is only a single s orbital on
+    // those atoms.
+
+    if (iParam == 1) { // there is a C atom at the cluster centre
+      // so check it's neighbours.
+      // excludes first atom in cluster:
+      int jStart = (*internalState).indexAtomicClusters[iAt];
+      int jEnd = (*internalState).indexAtomicClusters[iAt+1] - 1;
+      //printf("Atom range in cluster %i : < %i\n", jStart, jEnd);
+      for (int iNeighbour = jStart; iNeighbour < jEnd; iNeighbour++) {
+        int jAt = (*internalState).atomicGlobalAtNos[iNeighbour];
+        int jSpecies = (*internalState).globalSpeciesOfAtoms[jAt-1];
+        int jParam = (*internalState).species2params[jSpecies-1];
+        if (jParam == 0) { // H atom is in suroundings
+          int jCoordStart = 3 * iNeighbour; // stride in coordinates
           // distance squared
           double d2 =
-            (*((*internalState).atomicClusters+kk))
-	    *(*((*internalState).atomicClusters+kk))
-            +(*((*internalState).atomicClusters+kk+1))
-	    *(*((*internalState).atomicClusters+kk+1))
-            +(*((*internalState).atomicClusters+kk+2))
-	    *(*((*internalState).atomicClusters+kk+2));
-	  // scale such that final term is ~1E-12 by 4.0 a.u. cutoff
+            ((*internalState).atomicClusters[jCoordStart]
+             *(*internalState).atomicClusters[jCoordStart]
+             +(*internalState).atomicClusters[jCoordStart+1]
+             *(*internalState).atomicClusters[jCoordStart+1]
+             +(*internalState).atomicClusters[jCoordStart+2]
+             *(*internalState).atomicClusters[jCoordStart+2]
+             );
+          // scale such that final term is ~1E-12 by 4.0 a.u. cutoff
           d2 *= -1.0*(6.0/4.0)*(6.0/4.0);
           h0[iStart+1] += 1000.0*exp(d2);
           h0[iStart+2] += 1000.0*exp(d2);
         }
       }
     }
+
   }
-
-
 
   // off-site (diatomic) elements
   for (int iClust = 0; iClust < (*internalState).nBndClusters; iClust++) {
-    int jAtStart = (*internalState).indexBndClusters[iClust] - 1;
-    int jAtEnd = (*internalState).indexBndClusters[iClust+1] - 1;
 
-    //printf("Cluster %i, %i:%i\n", iClust+1, jAtStart, jAtEnd-1);
+    // Index for first atom in cluster
+    int iStart = (*internalState).indexBndClusters[iClust] - 1;
+    // Index for last atom in  cluster
+    int iEnd = (*internalState).indexBndClusters[iClust+1] - 1;
 
-    int jOrigAt = (*internalState).bndGlobalAtNos[jAtStart] - 1;
+    // First two atoms in the cluster, these having the bond between
+    // their orbitals
+    int iAt = (*internalState).bndGlobalAtNos[iStart] - 1;
+    int jAt = (*internalState).bndGlobalAtNos[iStart+1] - 1;
+    int iSp = (*internalState).globalSpeciesOfAtoms[iAt];
+    int jSp = (*internalState).globalSpeciesOfAtoms[jAt];
 
-    int iHamBnd = jOrigAt * *h0IndexStride + 1; // stride on h0Index
-						// 2D array
-
-    printf("iHam neigh of %i: %i, %i\n", jOrigAt, iHamBnd,
-	   h0Index[iHamBnd]-1);
-    printf("Bonds from atom %i : %i\n", jOrigAt+1, nElemPerAtom[jOrigAt]);
-
-    // coordinates
-    for (int iAt = jAtStart; iAt < jAtEnd; iAt++) {
-    //  jj = iClust * *h0IndexStride + ;
-    //  printf("Atom in bond cluster %i %i %i\n", iClust, iAt, jj);
-    //  int iStart = h0Index[jj];
-    //  printf("%i\n", iStart);
-    //
-    //  int ll = h0Index[jj+kk];
-    //  h0[ll] += 0.1;
+    // vector from first to second atom in the bond
+    double v[3];
+    for (int jj=0; jj < 3; jj++) {
+      v[jj] = (*internalState).bndClusters[3*(iStart+1)+jj];
+      v[jj] -= (*internalState).bndClusters[3*iStart+jj];
     }
+    double d = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+
+    int iParam = (*internalState).species2params[iSp-1];
+    int jParam = (*internalState).species2params[jSp-1];
+
+    if (iParam == jParam) {
+      // Homo-nuclear bond
+
+      if (iParam == 0) {
+        // H-H bond
+	h0[(*internalState).bondClusterIndex[iClust]] =
+	  (*internalState).hopping[0];
+      } else {
+        // C-C bond
+	h0[(*internalState).bondClusterIndex[iClust]] =
+	  (*internalState).hopping[3];
+	h0[(*internalState).bondClusterIndex[iClust]+1] =
+	  (*internalState).hopping[4];
+	h0[(*internalState).bondClusterIndex[iClust]+2] =
+	  (*internalState).hopping[4];
+	h0[(*internalState).bondClusterIndex[iClust]+3] =
+	  (*internalState).hopping[5];
+      }
+
+    } else {
+      // Hetero-nuclear bond
+
+      if (iParam == 0) {
+        // H-C bond, as iParam /= 0
+	h0[(*internalState).bondClusterIndex[iClust]] =
+	  (*internalState).hopping[1];
+	h0[(*internalState).bondClusterIndex[iClust]+1] =
+	  (*internalState).hopping[2];
+      } else {
+        // C-H bond
+	h0[(*internalState).bondClusterIndex[iClust]] =
+	  (*internalState).hopping[1];
+	h0[(*internalState).bondClusterIndex[iClust]+1] =
+	  (*internalState).hopping[2];
+      }
+
+    }
+
+
+    //h0[(*internalState).bondClusterIndex[iClust]] = 0.1 * (double) (iClust+1);
+
+    // Atoms in the rest of the bond cluster, if needed
+    /*for (int jj = iStart+2; jj < iEnd; jj++) {
+      int kAt = (*internalState).bndGlobalAtNos[jj] - 1;
+        printf("Atom surrounding bond number %i: %i\n", iClust, kAt);
+    }*/
+
   }
 
   // blank return message if nothing failing
