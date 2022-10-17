@@ -244,7 +244,6 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
 
 // Make and then get model predictions back to DFTB+
 int predict_model_for_dftbp(intptr_t *state, double *h0, double *over,
-                            int* h0Index, int* h0IndexStride,
                             char* message)
 {
 

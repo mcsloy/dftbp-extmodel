@@ -237,7 +237,6 @@ struct mystate {
 
   */
   int predict_model_for_dftbp(intptr_t *state, double *h0, double *over,
-                              int* h0Index, int* h0IndexStride,
                               char* message);
 
 
