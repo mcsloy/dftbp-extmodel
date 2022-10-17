@@ -12,7 +12,6 @@ set_target_properties(externalmodel_objlib PROPERTIES
   SOVERSION 1
   PUBLIC_HEADER include/externalmodel.h)
 
-set_target_properties(externalmodel_objlib PROPERTIES Fortran_MODULE_DIRECTORY ${includedir})
 set_target_properties(externalmodel_objlib PROPERTIES POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
 
 target_include_directories(externalmodel_objlib PUBLIC ${includedir})
