@@ -16,6 +16,7 @@ See the LICENSE file for terms of usage and distribution.
 #include <stdlib.h>
 #include <string.h>
 #include "../include/externalmodel.h"
+#include <julia.h>
 
 // Project version
 void dftbp_model_apbi(int* major, int* minor, int* patch)
@@ -32,11 +33,11 @@ void dftbp_provided_with(char* modelname,
 {
 
   // Name of external model
-  sprintf(modelname, "Huckel toy model");
+  sprintf(modelname, "ACEhamiltonians");
 
   // flags for capabilities of this specific model
   *capabilities = (mycapabilities) {
-    .hamiltonian = true, .overlap = false, .energy = false,
+    .hamiltonian = true, .overlap = true, .energy = false,
     .derivativeOrder = 0, .selfconsistent = false, .spinchannels = 0
   };
 
@@ -52,6 +53,20 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[],
                                int** shellLValues, double** shellOccs,
                                intptr_t *state, char* message)
 {
+  
+  
+  /* Todo:
+    - There is a non-trivial chance overflow errors arising from type collisions. A
+      safeguard should be put inplace to ensure that integers provided by Fortran
+      and Julia match up with those use by C; i.e. all 64 or 32 bit with no mixing.
+    - Set TLS settings
+    - The Julia model should be updated to:
+      - identify itself as either a Hamiltonian or overlap model.
+      - provide names for the species present.
+      - yield neutral occupations.
+    - Need to convert units from Bohr to Angstroms.
+
+  */
 
   // Allocate structure for internal state, and generate am intptr for
   // return to DFTB+
@@ -59,137 +74,176 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[],
     malloc(sizeof(struct mystate));
   *state = (intptr_t) internalState;
 
+
+
   FILE *input;
-  int ii, items;
+  int ii, jj, kk;
 
-  // Open input file for some constants for this model, assuming it's
-  // in the runtime directory
-  input = fopen("input.dat", "r");
-  if (!input) {
-    sprintf(message, "Library error opening input file.\n");
-    return -1;
+  // Initialise Julia
+  jl_init();
+  
+  jl_value_t *h_model;
+  jl_value_t *s_model;
+  
+  // Large structures will frequently get deleted from memory due to Julia's garbage
+  // collection subroutine. Thus one must "lock" important Julia based objects in
+  // memory by creating an artificial reference to prevent this from happening.
+  jl_value_t* refs = jl_eval_string("refs = IdDict()");
+  jl_function_t* setindex = jl_get_function(jl_base_module, "setindex!");
+
+  jl_eval_string("include(\"/home/ajmhpc/Projects/ACEhamiltonians/Code/Working/DFTB_Interface/ACEhamiltonians.jl-Dev/tools/dftbp_api.jl\")");
+  
+  jl_function_t *load_model = jl_eval_string("load_model");
+  jl_function_t *n_orbs_per_atom = jl_eval_string("n_orbs_per_atom");
+  jl_function_t *offers_species = jl_eval_string("offers_species");
+  jl_function_t *species_name_to_id = jl_eval_string("species_name_to_id");
+  jl_function_t *max_interaction_cutoff = jl_eval_string("max_interaction_cutoff");
+  jl_function_t *max_environment_cutoff = jl_eval_string("max_environment_cutoff");
+  jl_function_t *shells_on_species = jl_eval_string("shells_on_species!");
+  jl_function_t *n_shells_on_species = jl_eval_string("n_shells_on_species");
+  jl_function_t *shell_occupancies = jl_eval_string("shell_occupancies!");
+
+
+  jl_value_t* array_type_i32 = jl_apply_array_type((jl_value_t*)jl_int32_type, 1);
+  jl_value_t* array_type_f64 = jl_apply_array_type((jl_value_t*)jl_float64_type, 1);
+
+  /* LOADING MODELS 
+     Load in the ACEhamiltonians models for the Hamiltonian and overlap matrices
+     from the files located at the paths specified by the environmental variables
+     "H_MODEL_PATH" and "S_MODEL_PATH" respectively. These are then stored in the
+     state entity as `hamiltonian_model` and `overlap_model`.
+  */
+  if(getenv("H_MODEL_PATH")) {
+      h_model = jl_call1(load_model, jl_cstr_to_string(getenv("H_MODEL_PATH")));
+      jl_call3(setindex, refs, h_model, h_model);
+      internalState->hamiltonian_model = h_model;
+    } else {
+      // The "printf" command can be removed once DFTB+ has been updated to print out
+      // the "message" string feed.
+      printf("Environmental variable \"H_MODEL_PATH\" has not been set.\n");
+      sprintf(message, "Environmental variable \"H_MODEL_PATH\" has not been set.\n");
+      return -1;
+  }
+  
+
+  if(getenv("S_MODEL_PATH")) {
+      s_model = jl_call1(load_model, jl_cstr_to_string(getenv("S_MODEL_PATH")));
+      jl_call3(setindex, refs, s_model, s_model);
+      internalState->overlap_model = s_model;
+    } else {
+      // The "printf" command can be removed once DFTB+ has been updated to print out
+      // the "message" string feed.
+      printf("Environmental variable \"S_MODEL_PATH\" has not been set.\n");
+      sprintf(message, "Environmental variable \"S_MODEL_PATH\" has not been set.\n");
+      return -1;
+  
   }
 
-  // read ancillary input file for model parameters and then store
-  // them into the model's internal structure, that in turn will get passed
-  // around between calls to the model.
-  items = fscanf(input, "%lf %lf %lf", &internalState->onsites[0],
-                 &internalState->onsites[1], &internalState->onsites[2]);
-  if (items == EOF) {
-    sprintf(message, "Toy library malformed end of data file at first line\n");
-    return -3;
-  }
-  if (items != 3) {
-    sprintf(message, "Toy library malformed first line of data file: %i\n",
-            items);
-    return -3;
-  }
-  items = fscanf(input, "%lf %lf %lf %lf %lf %lf", &internalState->hopping[0],
-                 &internalState->hopping[1], &internalState->hopping[2],
-		 &internalState->hopping[3], &internalState->hopping[4],
-		 &internalState->hopping[5]);
-  if (items == EOF) {
-    sprintf(message, "Toy library malformed end of data file before 2nd line"
-            " (hopping integrals)\n");
-    return -3;
-  }
-  if (items != 6) {
-    sprintf(message, "Toy library malformed second line of data file\n");
-    return -3;
-  }
-  items = fscanf(input, "%lf", interactionCutoff);
-  if (items == EOF) {
-    sprintf(message, "Toy library malformed end of data file before 3rd line"
-            " (bond cut-off)\n");
-    return -3;
-  }
-  if (items != 1) {
-    sprintf(message, "Toy library malformed third line of data file\n");
-    return -3;
-  }
+  *environmentCutoff = jl_unbox_float64(jl_call1(max_environment_cutoff, h_model));
+  *interactionCutoff = jl_unbox_float64(jl_call1(max_interaction_cutoff, h_model));
+  internalState->n_orbitals = calloc(*nspecies, sizeof(int));
+  internalState->species_id = calloc(*nspecies, sizeof(int));
+  *nShellsOnSpecies =  calloc(*nspecies, sizeof(int));
+
+  int n_total_shells = 0;
+  int max_n_shells = 0;
+
+  bool offered;
+  
+  jl_value_t *name;
+  jl_value_t *species_i_id;
 
   for (ii = 0; ii < *nspecies; ii++) {
-    // This specific model is only for H and C atoms, so will throw an
-    // error otherwise
-    if (strcmp(speciesName[ii], "C") != 0 && strcmp(speciesName[ii], "H") != 0)
-      {
-        sprintf(message,
-                "Toy library only knows about C and H atoms, not %s.\n",
-                speciesName[ii]);
-        return -2;
+    name = jl_cstr_to_string(speciesName[ii]);
+    offered = jl_unbox_bool(jl_call2(offers_species, name, h_model));
+
+    if (offered) {  // If the species is provided by the model
+      // Get the id used by the model to refer to the species
+      species_i_id = jl_call2(species_name_to_id, name, h_model);
+
+      // Store the id into the species_id reference array
+      internalState->species_id[ii] = jl_unbox_int32(species_i_id);
+
+      // Add its orbital count to the n_orbitals array 
+      internalState->n_orbitals[ii] = jl_unbox_int32(jl_call2(n_orbs_per_atom, species_i_id, h_model));
+
+      // Work out the number of shells on the species
+      (*nShellsOnSpecies)[ii] = jl_unbox_int32(jl_call2(n_shells_on_species, species_i_id, h_model));
+
+      // Keep track of the i) total number of all shells and, ii) the maximum 
+      // number of shells on any species for use later on.
+      n_total_shells = n_total_shells + (*nShellsOnSpecies)[ii];
+
+      if ((*nShellsOnSpecies)[ii] > max_n_shells) {
+        max_n_shells = (*nShellsOnSpecies)[ii];
       }
-    if (strcmp(speciesName[ii], "H") == 0) {
-      (*internalState).species2params[ii] = 0;
-    }
-    if (strcmp(speciesName[ii], "C") == 0) {
-      (*internalState).species2params[ii] = 1;
-    }
+
+    } else {  // If it is not offered by the model then raise an error.
+      printf("Species %s is not offered by the provided model\n", speciesName[ii]);
+      sprintf(message, "Species %s is not offered by the provided model\n", speciesName[ii]);
+      return -3;
+    };
   }
 
-  // Surroundings required around atoms and bonds:
-  *environmentCutoff = 4.0;
+  // The arrays `shellLValues` and `shellOccs` specify the azimuthal quantum
+  // number and occupancy for each shell respectively. While the size of the
+  // first array, `shellLValues`, is what one might expect, the second array,
+  // `shellOccs`, is typically larger. This is because it is reshaped by DFTB+
+  // into n×m Fortran array where `n` is the number of species and `m` is the
+  // maximum number of shells present on any atom. 
+  *shellLValues = calloc(n_total_shells, sizeof(int));
+  *shellOccs =  calloc(*nspecies * max_n_shells, sizeof(double));
 
-  // Maximum number of shells of orbitals on atoms in this model
-  int maxShells = 2;
 
-  /* This particular model is so only a single s shell on H and two s
-     shells on C Note count for shells uses Fortran convention
-     starting at 1, while L uses physics convention of s=0 */
-  *nShellsOnSpecies =  calloc(*nspecies, sizeof(int));
-  // Note, this will be a fortran array on the other end, so
-  // [nSpecies][maxShells] (hence the 2):
-  *shellLValues =  calloc(*nspecies * maxShells, sizeof(int));
+  kk = 0;
+  jl_array_t *shell_ls, *shell_ocs;
+  
   for (ii=0; ii<*nspecies; ii++) {
-    if ((*internalState).species2params[ii] == 0)
-      {
-        // Hydrogen, s
-        (*nShellsOnSpecies)[ii] = 1;
-        (*shellLValues)[ii] = 0;
-      } else
-      {
-        // Carbon, s and s* shells
-        (*nShellsOnSpecies)[ii] = 2;
-        (*shellLValues)[ii] = 0;
-        (*shellLValues)[ii+1] = 0;
-      }
+    
+    jj = ii * max_n_shells;
+
+    // Gather the part of the array `shellLValues` that will hold the azimuthal quantum
+    // numbers associated with species `ii`. 
+    shell_ls = jl_ptr_to_array_1d(array_type_i32, (*shellLValues)+kk, (*nShellsOnSpecies)[ii], 0);
+    shell_ocs = jl_ptr_to_array_1d(array_type_f64, (*shellOccs)+jj, (*nShellsOnSpecies)[ii], 0);
+
+    // Fill the azimuthal number array using the Julia function `shells_on_species`.
+    jl_call3(
+      shells_on_species, (jl_value_t*)shell_ls,
+      jl_box_int32((*internalState).species_id[ii]), h_model);
+
+    // Fill the occupation array using the Julia function `shells_on_species`.
+    jl_call3(
+      shell_occupancies, (jl_value_t*)shell_ocs,
+      jl_box_int32((*internalState).species_id[ii]), h_model);
+
+    // Update the counter index which is responsible for tracking the start of the
+    // next slice of `shellLValues`.
+    kk = kk + (*nShellsOnSpecies)[ii];
   }
 
-  // each atom is neutral when it's single shell containing only one
-  // electron:
-  *shellOccs =  calloc(*nspecies * maxShells, sizeof(double));
-  for (ii=0; ii<*nspecies; ii++) {
-    int jj = ii * maxShells;
-    if ((*internalState).species2params[ii] == 0)
-      {
-        // H atom, the s orbital is occupied
-        (*shellOccs)[jj] = 1.0;
-      } else {
-      // C atom, only the s orbital is occupied
-      (*shellOccs)[jj] = 1.0;
-    }
-  }
 
   (*internalState).initialised = true;
-
-  printf(" Initial on-site energies : H %f, C %f %f\n",
-         (*internalState).onsites[0], (*internalState).onsites[1],
-         (*internalState).onsites[2]);
-
 
   (*internalState).nAtomicClusters = 0;
   (*internalState).indexAtomicClusters = NULL;
   (*internalState).atomicClusters = NULL;
   (*internalState).atomicGlobalAtNos = NULL;
+  (*internalState).atomic_species_ids = NULL;
 
   (*internalState).nBndClusters = 0;
   (*internalState).indexBndClusters = NULL;
   (*internalState).bndClusters = NULL;
   (*internalState).bndGlobalAtNos = NULL;
   (*internalState).bondClusterIndex = NULL;
+  (*internalState).bond_species_ids = NULL;
+  
 
   // blank return message if nothing happening
   sprintf(message, "\n");
   return 0;
+
+
 
 }
 
@@ -202,6 +256,7 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
                            int* bndGlobalAtNos, int* atomClusterIndex,
                            int* bondClusterIndex, char* message)
 {
+  int ii, count;
 
   // map pointer back to structure
   struct mystate* internalState = (struct mystate*) *state;
@@ -211,7 +266,6 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
     return -1;
   }
 
-
   internalState->globalSpeciesOfAtoms = species;
 
   internalState->nAtomicClusters = *nAtomicClusters;
@@ -219,6 +273,16 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
   internalState->atomicClusters = atomicClusters;
   internalState->atomicGlobalAtNos = atomicGlobalAtNos;
   internalState->atomClusterIndex = atomClusterIndex;
+  
+
+  // Construct an array specifying the species-id of each and every atom present
+  // in the atom-clusters. 
+  count = indexAtomicClusters[*nAtomicClusters] - 1;
+  internalState->atomic_species_ids = calloc(count, sizeof(int));
+  for (ii = 0; ii < count; ii++) {
+    internalState->atomic_species_ids[ii] = internalState->species_id[species[atomicGlobalAtNos[ii] - 1] - 1];
+  }
+  
 
   //printf("Number of atomic clusters: %i\n", *nAtomicClusters);
 
@@ -227,6 +291,16 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
   internalState->bndClusters = bndClusters;
   internalState->bndGlobalAtNos = bndGlobalAtNos;
   internalState->bondClusterIndex = bondClusterIndex;
+
+
+  // Construct an array specifying the species-id of each and every atom present
+  // in the bond-clusters. 
+  count = indexBndClusters[*nBndClusters] - 1;
+  internalState->bond_species_ids = calloc(count, sizeof(int));
+  for (ii = 0; ii < count; ii++) {
+    internalState->bond_species_ids[ii] = internalState->species_id[species[bndGlobalAtNos[ii] - 1] - 1];
+  }
+
 
   //printf("Number of bond clusters: %i\n", *nBndClusters);
 
@@ -246,151 +320,139 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
 int predict_model_for_dftbp(intptr_t *state, double *h0, double *over,
                             char* message)
 {
-
   struct mystate* internalState = (struct mystate*) *state;
 
-  // For this specific model, overlap is ignored, but would be indexed
-  // in the same way as the hamiltonian
+  jl_function_t *build_on_site_atom_block = jl_eval_string("build_on_site_atom_block!");
+  jl_function_t *build_off_site_atom_block = jl_eval_string("build_off_site_atom_block!");
 
-  // global atom number == atomic cluster number
-  for (int iAt=0; iAt<(*internalState).nAtomicClusters; iAt++) {
-    // First atom location in species etc. arrays
-    int iStart = (*internalState).atomClusterIndex[iAt];
-    int iSpecies = (*internalState).globalSpeciesOfAtoms[iAt];
+  jl_value_t* array_type_i32 = jl_apply_array_type((jl_value_t*)jl_int32_type, 1);
+  jl_value_t* array_type_f64 = jl_apply_array_type((jl_value_t*)jl_float64_type, 1);
 
-    // index for this model's parameter storage, vs the atomic species
-    // indices from DFTB+ :
-    int iParam = (*internalState).species2params[iSpecies-1];
+  int i_block, i_start, j_start, i_species, j_species, n_orbs_i, n_orbs_j, n_neighbours;
+  int i_atom, j_atom;
+  
+  jl_value_t *args[4];
 
-    // simple use of onsite energies
-    if (iParam == 0) // H atom
-      {
-        h0[iStart] = (*internalState).onsites[0]; // s orbital
-      } else // C atom
-      {
-        // 2x2 symmetric matrix of s and s* onsites, reshaped as a 4
-        // element vector:
-        h0[iStart] = (*internalState).onsites[1]; // s orbital
-        h0[iStart+3] = (*internalState).onsites[2]; // s* orbital
-      }
+  // Loop over all on site atom blocks by index
+  for (i_block=0; i_block<(*internalState).nAtomicClusters; i_block++) {
+      
+      // Index specifying the start of the atom-block `i` within the Hamiltonian
+      // and overlap matrix arrays `h0` and `over` respectively.
+      i_start = (*internalState).atomClusterIndex[i_block];
 
+      // Index specifying the start of the cluster associated with atom-block `i`
+      // in arrays `atomicClusters` & `species_id`. Must less by one to account
+      // for indices here using Fortran indexing convention (unlike atomClusterIndex).
+      j_start = (*internalState).indexAtomicClusters[i_block] - 1;
 
-    // Toy crystal field model, demonstrating getting positions and
-    // species of atoms in the halo around each atomic site in the
-    // geometry
-    //
-    // Model affects s and s* mixing on C atoms, but only due to the
-    // presence of any surrounding H atoms within the environment
-    // cutoff distance (ignoring any surrounding C). H atoms
-    // themselves would be unaffected by crystal field terms from
-    // their surroundings, as there is only a single s orbital on
-    // those atoms.
+      // Index of the atom to which this atom-block pertains
+      i_atom = (*internalState).atomicGlobalAtNos[j_start] - 1;
 
-    if (iParam == 1) { // there is a C atom at the cluster centre
-      // so check it's neighbours.
-      // excludes first atom in cluster:
-      int jStart = (*internalState).indexAtomicClusters[iAt];
-      int jEnd = (*internalState).indexAtomicClusters[iAt+1] - 1;
-      //printf("Atom range in cluster %i : < %i\n", jStart, jEnd);
-      for (int iNeighbour = jStart; iNeighbour < jEnd; iNeighbour++) {
-        int jAt = (*internalState).atomicGlobalAtNos[iNeighbour];
-        int jSpecies = (*internalState).globalSpeciesOfAtoms[jAt-1];
-        int jParam = (*internalState).species2params[jSpecies-1];
-        if (jParam == 0) { // H atom is in suroundings
-          int jCoordStart = 3 * iNeighbour; // stride in coordinates
-          // distance squared
-          double d2 =
-            ((*internalState).atomicClusters[jCoordStart]
-             *(*internalState).atomicClusters[jCoordStart]
-             +(*internalState).atomicClusters[jCoordStart+1]
-             *(*internalState).atomicClusters[jCoordStart+1]
-             +(*internalState).atomicClusters[jCoordStart+2]
-             *(*internalState).atomicClusters[jCoordStart+2]
-             );
-          // scale such that final term is ~1E-12 by 4.0 a.u. cutoff
-          d2 *= -1.0*(6.0/4.0)*(6.0/4.0);
-          h0[iStart+1] += 1000.0*exp(d2);
-          h0[iStart+2] += 1000.0*exp(d2);
-        }
-      }
+      // if (i_atom != 1) {
+      //   continue;
+      // }
+
+      // Species index; this is just 1 less than the number as used internally by DFTB+
+      i_species = (*internalState).globalSpeciesOfAtoms[i_atom] - 1;
+
+      // Number of orbitals on the associated species
+      n_orbs_i = internalState->n_orbitals[i_species];
+
+      // Number of atoms present in cluster `i`
+      n_neighbours = (*internalState).indexAtomicClusters[i_block+1] - 1 - j_start;
+
+      // Gather the coordinates associate with atom-block `i` 
+      args[1] = (jl_value_t*)jl_ptr_to_array_1d(
+        array_type_f64,(*internalState).atomicClusters + (3 * j_start),
+        3 * n_neighbours, 0);
+
+      // Get the species id's of the atoms present in the atom cluster 
+      args[2] = (jl_value_t*)jl_ptr_to_array_1d(
+        array_type_i32,
+        (*internalState).atomic_species_ids + j_start,
+        n_neighbours,
+        0);
+
+      // Collect the relevant atom-block from the Hamiltonian matrix
+      args[0] = (jl_value_t*)jl_ptr_to_array_1d(
+        array_type_f64, h0+i_start, n_orbs_i * n_orbs_i, 0);
+    
+      // Add the Hamiltonian model to the arguments list
+      args[3] = (jl_value_t*)(*internalState).hamiltonian_model;
+
+      // Call out to the Julia on-site block constructor method to build the
+      // current atom-block of the Hamiltonian matrix      
+      jl_call(build_on_site_atom_block, args, 4);
+
+      // Repeat this process for the associated block of the overlap matrix
+      args[0] = (jl_value_t*)jl_ptr_to_array_1d(
+        array_type_f64, over+i_start, n_orbs_i * n_orbs_i, 0);
+      args[3] = (jl_value_t*)(*internalState).overlap_model;
+      jl_call(build_on_site_atom_block, args, 4);
     }
 
-  }
+  // Loop over all on site atom blocks by index
+  for (i_block=0; i_block<(*internalState).nBndClusters; i_block++) {
 
-  // off-site (diatomic) elements
-  for (int iClust = 0; iClust < (*internalState).nBndClusters; iClust++) {
+      // Index specifying the start of the atom-block `i` within the Hamiltonian
+      // and overlap matrix arrays `h0` and `over` respectively.
+      i_start = (*internalState).bondClusterIndex[i_block];
 
-    // Index for first atom in cluster
-    int iStart = (*internalState).indexBndClusters[iClust] - 1;
-    // Index for last atom in  cluster
-    int iEnd = (*internalState).indexBndClusters[iClust+1] - 1;
+      // Index specifying the start of the cluster associated with atom-block `i`
+      // in arrays `bndClusters` & `species_id`. Must less by one to account
+      // for indices here using Fortran indexing convention (unlike bondClusterIndex).
+      j_start = (*internalState).indexBndClusters[i_block] - 1;
 
-    // First two atoms in the cluster, these having the bond between
-    // their orbitals
-    int iAt = (*internalState).bndGlobalAtNos[iStart] - 1;
-    int jAt = (*internalState).bndGlobalAtNos[iStart+1] - 1;
-    int iSp = (*internalState).globalSpeciesOfAtoms[iAt];
-    int jSp = (*internalState).globalSpeciesOfAtoms[jAt];
+      // Index of the atoms to which this interaction-block pertains
+      i_atom = (*internalState).bndGlobalAtNos[j_start] - 1;
+      j_atom = (*internalState).bndGlobalAtNos[j_start + 1] - 1;
 
-    // vector from first to second atom in the bond
-    double v[3];
-    for (int jj=0; jj < 3; jj++) {
-      v[jj] = (*internalState).bndClusters[3*(iStart+1)+jj];
-      v[jj] -= (*internalState).bndClusters[3*iStart+jj];
-    }
-    double d = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+      // if (!(i_atom == 1 && j_atom==1)) {
+      //   continue;
+      // }
 
-    int iParam = (*internalState).species2params[iSp-1];
-    int jParam = (*internalState).species2params[jSp-1];
+      // Species index; this is just one less than the number as used
+      // internally by DFTB+
+      i_species = (*internalState).globalSpeciesOfAtoms[i_atom] - 1;
+      j_species = (*internalState).globalSpeciesOfAtoms[j_atom] - 1;
+      
+      // Number of orbitals on the associated species
+      n_orbs_i = internalState->n_orbitals[i_species];
+      n_orbs_j = internalState->n_orbitals[j_species];
 
-    if (iParam == jParam) {
-      // Homo-nuclear bond
+      // Number of atoms present in cluster `i`
+      n_neighbours = (*internalState).indexBndClusters[i_block+1] - 1 - j_start;
 
-      if (iParam == 0) {
-        // H-H bond
-	h0[(*internalState).bondClusterIndex[iClust]] =
-	  (*internalState).hopping[0];
-      } else {
-        // C-C bond
-	h0[(*internalState).bondClusterIndex[iClust]] =
-	  (*internalState).hopping[3];
-	h0[(*internalState).bondClusterIndex[iClust]+1] =
-	  (*internalState).hopping[4];
-	h0[(*internalState).bondClusterIndex[iClust]+2] =
-	  (*internalState).hopping[4];
-	h0[(*internalState).bondClusterIndex[iClust]+3] =
-	  (*internalState).hopping[5];
-      }
+      // Gather the coordinates associate with atom-block `i` 
+      args[1] = (jl_value_t*)jl_ptr_to_array_1d(
+        array_type_f64,(*internalState).bndClusters + (3 * j_start),
+        3 * n_neighbours, 0);
 
-    } else {
-      // Hetero-nuclear bond
+      // Get the species id's of the atoms present in the atom cluster 
+      args[2] = (jl_value_t*)jl_ptr_to_array_1d(
+        array_type_i32,
+        (*internalState).bond_species_ids + j_start,
+        n_neighbours,
+        0);
 
-      if (iParam == 0) {
-        // H-C bond, as iParam /= 0
-	h0[(*internalState).bondClusterIndex[iClust]] =
-	  (*internalState).hopping[1];
-	h0[(*internalState).bondClusterIndex[iClust]+1] =
-	  (*internalState).hopping[2];
-      } else {
-        // C-H bond
-	h0[(*internalState).bondClusterIndex[iClust]] =
-	  (*internalState).hopping[1];
-	h0[(*internalState).bondClusterIndex[iClust]+1] =
-	  (*internalState).hopping[2];
-      }
+      // Collect the relevant atom-block from the Hamiltonian matrix
+      args[0] = (jl_value_t*)jl_ptr_to_array_1d(
+        array_type_f64, h0+i_start, n_orbs_i * n_orbs_j, 0);
+    
+      // Add the Hamiltonian model to the arguments list
+      args[3] = (jl_value_t*)(*internalState).hamiltonian_model;
 
+      // Call out to the Julia on-site block constructor method to build the
+      // current atom-block of the Hamiltonian matrix      
+      jl_call(build_off_site_atom_block, args, 4);
+
+      // Repeat this process for the associated block of the overlap matrix
+      args[0] = (jl_value_t*)jl_ptr_to_array_1d(
+        array_type_f64, over+i_start, n_orbs_i * n_orbs_j, 0);
+      args[3] = (jl_value_t*)(*internalState).overlap_model;
+      jl_call(build_off_site_atom_block, args, 4);
     }
 
-
-    //h0[(*internalState).bondClusterIndex[iClust]] = 0.1 * (double) (iClust+1);
-
-    // Atoms in the rest of the bond cluster, if needed
-    /*for (int jj = iStart+2; jj < iEnd; jj++) {
-      int kAt = (*internalState).bndGlobalAtNos[jj] - 1;
-        printf("Atom surrounding bond number %i: %i\n", iClust, kAt);
-    }*/
-
-  }
 
   // blank return message if nothing failing
   sprintf(message, "\n");
@@ -410,5 +472,6 @@ void cleanup_model_for_dftbp(intptr_t *state) {
 
   free(internalState);
   *state = (intptr_t) internalState;
+  jl_atexit_hook(0);
 
 }

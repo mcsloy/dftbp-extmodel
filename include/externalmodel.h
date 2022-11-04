@@ -8,6 +8,8 @@
    @file
 */
 
+#include <julia.h>
+
 #ifndef H_EXTERNALMODEL
 #define H_EXTERNALMODEL
 
@@ -84,13 +86,24 @@ struct mystate {
   // Indexing for diatomic elements of H or S matrices
   int* bondClusterIndex;
 
-  // internal model parameters
-  double onsites[3]; // Hs, Cs and Cs* alpha
-  double hopping[6]; // Hs-Hs, Hs-Cs, Hs-Cs*, Cs-Cs, Cs-Cs*, Cs*-Cs*
-		     // beta values
-  // index from order of chemical species in DFTB+ to this code's
-  // parameter ordering:
-  int species2params[2];
+  // Analogous to atomicGlobalAtNos and bndGlobalAtNos but using the species
+  // id as specified by the Julia model. This is created during the call to
+  // update_model_for_dftbp.
+  int* atomic_species_ids;
+  int* bond_species_ids;
+
+
+  jl_value_t *hamiltonian_model;
+  jl_value_t *overlap_model;
+  
+  // Array used to declare the number of orbitals on each species.
+  // This is required to work out how many elements from the H/S
+  // matrices should be extracted for a given atom-block.  
+  int* n_orbitals;
+
+  // Array mapping from "species index number" as used internally by DFTB+
+  // to the unique numerical identifier used by the ACEhamiltonians.
+  int* species_id;
 
 };
 
@@ -212,8 +225,8 @@ struct mystate {
                              int* nAtomicClusters, int* indexAtomicClusters,
                              double* atomicClusters, int* atomicGlobalAtNos,
                              int* nBndClusters, int* indexBndClusters,
-			     double* bndClusters, int* bndGlobalAtNos,
-			     int* atomClusterIndex, int* bondClusterIndex,
+			                       double* bndClusters, int* bndGlobalAtNos,
+			                       int* atomClusterIndex, int* bondClusterIndex,
                              char* message);
 
 
