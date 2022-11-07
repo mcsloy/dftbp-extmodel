@@ -274,7 +274,6 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
   internalState->atomicGlobalAtNos = atomicGlobalAtNos;
   internalState->atomClusterIndex = atomClusterIndex;
   
-
   // Construct an array specifying the species-id of each and every atom present
   // in the atom-clusters. 
   count = indexAtomicClusters[*nAtomicClusters] - 1;
@@ -283,9 +282,6 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
     internalState->atomic_species_ids[ii] = internalState->species_id[species[atomicGlobalAtNos[ii] - 1] - 1];
   }
   
-
-  //printf("Number of atomic clusters: %i\n", *nAtomicClusters);
-
   internalState->nBndClusters = *nBndClusters;
   internalState->indexBndClusters = indexBndClusters;
   internalState->bndClusters = bndClusters;
@@ -300,14 +296,6 @@ int update_model_for_dftbp(intptr_t *state, int* species, int* nAtomicClusters,
   for (ii = 0; ii < count; ii++) {
     internalState->bond_species_ids[ii] = internalState->species_id[species[bndGlobalAtNos[ii] - 1] - 1];
   }
-
-
-  //printf("Number of bond clusters: %i\n", *nBndClusters);
-
-  /*printf(" Initial on-site energies : H %f, C %f %f\n",
-         (*internalState).onsites[0], (*internalState).onsites[1],
-         (*internalState).onsites[2]);
-  */
 
   // blank return message if nothing happening
   sprintf(message, "\n");
@@ -347,10 +335,6 @@ int predict_model_for_dftbp(intptr_t *state, double *h0, double *over,
 
       // Index of the atom to which this atom-block pertains
       i_atom = (*internalState).atomicGlobalAtNos[j_start] - 1;
-
-      // if (i_atom != 1) {
-      //   continue;
-      // }
 
       // Species index; this is just 1 less than the number as used internally by DFTB+
       i_species = (*internalState).globalSpeciesOfAtoms[i_atom] - 1;
@@ -407,10 +391,6 @@ int predict_model_for_dftbp(intptr_t *state, double *h0, double *over,
       i_atom = (*internalState).bndGlobalAtNos[j_start] - 1;
       j_atom = (*internalState).bndGlobalAtNos[j_start + 1] - 1;
 
-      // if (!(i_atom == 1 && j_atom==1)) {
-      //   continue;
-      // }
-
       // Species index; this is just one less than the number as used
       // internally by DFTB+
       i_species = (*internalState).globalSpeciesOfAtoms[i_atom] - 1;
@@ -451,6 +431,7 @@ int predict_model_for_dftbp(intptr_t *state, double *h0, double *over,
         array_type_f64, over+i_start, n_orbs_i * n_orbs_j, 0);
       args[3] = (jl_value_t*)(*internalState).overlap_model;
       jl_call(build_off_site_atom_block, args, 4);
+      
     }
 
 
