@@ -75,7 +75,6 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[],
   *state = (intptr_t) internalState;
 
 
-
   FILE *input;
   int ii, jj, kk;
 
@@ -91,7 +90,8 @@ int initialise_model_for_dftbp(int* nspecies, char* speciesName[],
   jl_value_t* refs = jl_eval_string("refs = IdDict()");
   jl_function_t* setindex = jl_get_function(jl_base_module, "setindex!");
 
-  jl_eval_string("include(\"/home/ajmhpc/Projects/ACEhamiltonians/Code/Working/DFTB_Interface/ACEhamiltonians.jl-Dev/tools/dftbp_api.jl\")");
+  jl_eval_string("using ACEhamiltonians");
+  jl_eval_string("using ACEhamiltonians.DftbpApi");
   
   jl_function_t *load_model = jl_eval_string("load_model");
   jl_function_t *n_orbs_per_atom = jl_eval_string("n_orbs_per_atom");
@@ -433,7 +433,6 @@ int predict_model_for_dftbp(intptr_t *state, double *h0, double *over,
       jl_call(build_off_site_atom_block, args, 4);
       
     }
-
 
   // blank return message if nothing failing
   sprintf(message, "\n");
